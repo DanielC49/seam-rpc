@@ -1,0 +1,24 @@
+{
+  "name": "@seam-rpc/server",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "bin": {
+    "seam-rpc": "./dist/bin/generate-schema.js"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "Daniel Clímaco",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "@types/node": "^24.3.1",
+    "express": "^5.1.0",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "fast-glob": "^3.3.3"
+  }
+}

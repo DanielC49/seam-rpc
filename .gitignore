@@ -1,0 +1,11 @@
+# Node modules
+node_modules/
+**/node_modules/
+
+# Build outputs
+dist/
+**/dist/
+
+# TypeScript incremental build info
+*.tsbuildinfo
+**/*.tsbuildinfo

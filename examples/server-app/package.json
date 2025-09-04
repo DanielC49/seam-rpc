@@ -1,0 +1,21 @@
+{
+  "name": "server-app",
+  "version": "1.0.0",
+  "main": "./dist/index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "gs": "seam-rpc gen-schema ./src/api/* ../client-app/src/api"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "devDependencies": {
+    "@types/express": "^5.0.3",
+    "typescript": "^5.9.2"
+  },
+  "dependencies": {
+    "@seam-rpc/server": "file:../../packages/server",
+    "express": "^5.1.0"
+  }
+}
