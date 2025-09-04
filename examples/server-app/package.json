@@ -4,7 +4,7 @@
   "main": "./dist/index.js",
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "gs": "seam-rpc gen-schema ./src/api/* ../client-app/src/api"
+    "gc": "seam-rpc gen-client ./src/api/* ../client-app/src/api"
   },
   "keywords": [],
   "author": "",

@@ -10,25 +10,25 @@ main();
 async function main() {
     const args = process.argv;
 
-    if (args.length != 4 && args.length != 5)
-        return console.error("Usage: seam-rpc gen-schema <schema-file.ts> [output-file.ts]");
+    if (args.length != 5)
+        return console.error("Usage: seam-rpc gen-client <input-files> [output-folder]");
 
     const inputFiles = await fg(args[3]);
-    const outputPath = args[4] || "./src/frontend/api";
+    const outputPath = args[4];
 
     try {
         for (const inputFile of inputFiles) {
-            generateSchema(inputFile, outputPath);
+            generateClientFile(inputFile, outputPath);
         }
 
-        console.log(`✅ Schemas generated at ${outputPath}`);
+        console.log(`✅ Client files generated at ${outputPath}`);
     } catch (err: any) {
-        console.error("❌ Failed to generate schema:", err.message);
+        console.error("❌ Failed to generate client file:", err.message);
         process.exit(1);
     }
 }
 
-function generateSchema(inputFile: string, outputPath: string): void {
+function generateClientFile(inputFile: string, outputPath: string): void {
     const file = path.resolve(process.cwd(), inputFile);
 
     if (!fs.existsSync(file)) {
@@ -59,8 +59,9 @@ function generateSchema(inputFile: string, outputPath: string): void {
             }
 
             const funcName = node.name.getText();
+            const jsDoc = ts.getJSDocCommentsAndTags(node).map(e => e.getFullText()).filter(Boolean).join("\n");
 
-            let signature = `export function ${funcName}(`;
+            let signature = `${jsDoc}\nexport function ${funcName}(`;
             const paramsText = node.parameters
                 .map((p) => {
                     const paramName = p.name.getText();
@@ -87,7 +88,7 @@ function generateSchema(inputFile: string, outputPath: string): void {
 
     fs.writeFileSync(path.resolve(outputPath, path.basename(file)), content, "utf-8");
 
-    console.log(`✅ Schema generated: ${path.basename(file)}`);
+    console.log(`✅ Client file generated: ${path.basename(file)}`);
 }
 
 function hasExportModifier(node: Node) {

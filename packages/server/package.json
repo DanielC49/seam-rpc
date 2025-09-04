@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "./dist/index.js",
   "bin": {
-    "seam-rpc": "./dist/bin/generate-schema.js"
+    "seam-rpc": "./dist/bin/gen-client.js"
   },
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"

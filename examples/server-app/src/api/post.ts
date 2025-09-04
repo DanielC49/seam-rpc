@@ -12,6 +12,7 @@ const posts: Post[] = [];
 
 /**
  * Creates a post and returns its ID.
+ * awdwad
  * @param title 
  * @param content 
  */
