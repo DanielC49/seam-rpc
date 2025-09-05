@@ -17,13 +17,28 @@ export function createUser(name: string): Promise<string> {
 }
 
 export function getUser(id: string): Promise<User | undefined> {
-    return new Promise((resolve) => {
-        resolve(users.find(e => e.id == id));
+    return new Promise((resolve, reject) => {
+        const user = users.find(e => e.id == id);
+        if (user)
+            resolve(user);
+        else
+            reject("user not found");
     });
 }
 
 export function getUsers(): Promise<User[]> {
     return new Promise((resolve) => {
         resolve(users);
+    });
+}
+
+/**
+ * Upload a file.
+ * @param buffer 
+ * @returns 
+ */
+export function uploadFile(buffer: Buffer): Promise<void> {
+    return new Promise((resolve) => {
+        resolve();
     });
 }

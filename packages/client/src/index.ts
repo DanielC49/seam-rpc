@@ -9,8 +9,6 @@ export function callApi(routerName: string, funcName: string, data: any): Promis
         if (!apiUrl)
             return console.error("Missing API URL");
 
-        console.log(data)
-
         const res = await fetch(`${apiUrl}/${routerName}/${funcName}`, {
             method: "POST",
             headers: {
@@ -19,10 +17,12 @@ export function callApi(routerName: string, funcName: string, data: any): Promis
             body: JSON.stringify(data),
         });
 
-        if (!res.ok) {
-            return console.error(res);
+        if (res.ok) {
+            resolve((await res.json()).result);
+        } else if (res.status == 400) {
+            reject((await res.json()));
+        } else {
+            console.error(res);
         }
-
-        resolve((await res.json()).result);
     });
 }

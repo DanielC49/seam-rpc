@@ -1,6 +1,6 @@
 import { setApiUrl } from "@seam-rpc/client";
-import * as user from "./api/user";
-import * as post from "./api/post";
+import * as user from "./api/users";
+import * as post from "./api/posts";
 
 setApiUrl("http://localhost:3000");
 
@@ -18,7 +18,7 @@ async function test() {
         console.log("RESULT 3", users);
 
         const posts = await post.createPost("1", "Test", "Testing posts");
-        console.log(posts);
+        console.log("RESULT 4", posts);
     } catch (err) {
         console.error(err);
     }

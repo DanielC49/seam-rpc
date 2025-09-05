@@ -1,4 +1,4 @@
-import { getUser } from "./user";
+import { getUser } from "./users";
 
 interface Post {
     id: string;
@@ -18,21 +18,25 @@ const posts: Post[] = [];
  */
 export function createPost(authorId: string, title: string, content: string): Promise<string> {
     return new Promise(async (resolve, reject) => {
-        const author = await getUser(authorId);
+        try {
+            const author = await getUser(authorId);
 
-        if (!author)
-            reject();
+            if (!author)
+                reject();
 
-        const post: Post = {
-            id: Date.now().toString(),
-            authorId,
-            title,
-            content,
-            likes: 0
-        };
+            const post: Post = {
+                id: Date.now().toString(),
+                authorId,
+                title,
+                content,
+                likes: 0
+            };
 
-        posts.push(post);
-        resolve(post.id);
+            posts.push(post);
+            resolve(post.id);
+        } catch (err) {
+            reject(err);
+        }
     });
 }
 

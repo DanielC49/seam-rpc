@@ -36,7 +36,7 @@ function generateClientFile(inputFile: string, outputPath: string): void {
         process.exit(1);
     }
 
-    const imports = ["import { callApi } from \"@seam-rpc/client\";"];
+    const imports = ["import { callApi } from \"@seam-rpc/client\";\n"];
     const apiDef: string[] = [];
     const typeDefs: string[] = [];
 

@@ -14,8 +14,8 @@ export function createRouter(app: Express, path: string, routerDefinition: Route
         try {
             const result = await routerDefinition[req.params.funcName](...Object.values(req.body));
             res.send(JSON.stringify({ result }));
-        } catch (err) {
-            res.sendStatus(500);
+        } catch (error) {
+            res.status(400).send({ error });
         }
     });
 
