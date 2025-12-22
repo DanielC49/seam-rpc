@@ -85,6 +85,7 @@ client-app
      ├─ users.ts
      └─ posts.ts
 ```
+The api folder in the client contains the generated API client files, and should not be manually edited.
 
 The generated `api/users.ts` file:
 > Notice that the JSDoc comments are included in the client files.
@@ -95,7 +96,6 @@ export interface User {
     id: string;
     name: string;
 }
-
 /**
  * Creates a new user and returns its ID.
  * @param name The name of the user.
