@@ -37,6 +37,11 @@ const users: User[] = [];
  * Define your functions like usual TypeScript functions (need to be exported)
  */
 
+/**
+ * Creates a new user and returns its ID.
+ * @param name The name of the user.
+ * @returns ID of the newly created user.
+ */
 export function createUser(name: string): Promise<string> {
     return new Promise(resolve => {
         const user = {
@@ -48,15 +53,24 @@ export function createUser(name: string): Promise<string> {
     });
 }
 
+/**
+ * Gets a user by ID.
+ * @param id The ID of the user.
+ * @returns The user object.
+ */
 export function getUser(id: string): Promise<User | undefined> {
-    return new Promise(resolve => {
-        resolve(users.find(e => e.id == id));
+    return new Promise((resolve, reject) => {
+        const user = users.find(e => e.id == id);
+        if (user)
+            resolve(user);
+        else
+            reject("user not found");
     });
 }
 ```
 
 ### Client
-The client needs to have the same schema as your API but send a request to the server on each function call. SeamRPC makes this process very simple: just call the CLI command `seam-rpc gen-client <input-files> <output-folder>`.
+The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send an HTTP requests to the server. SeamRPC can automatically generate the client schema files. To do this, you can either run the command `seam-rpc gen-client <input-files> <output-folder>` or [define a config file](#config-file) and then run the command `seam-rpc gen-client`.
 
 - `input-files` - Specify what files to generate the client files from. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
 - `output-folder` - Specify the folder where to store the generated client api files.
@@ -86,3 +100,13 @@ export function createUser(name: string): Promise<string> { return callApi("user
 
 export function getUser(id: string): Promise<User | undefined> { return callApi("users", "getUser", { id }); }
 ```
+
+### Config file
+If you don't want to specify the input files and output folder every time you want to generate the client files, you can create a config file where you define these paths. You can create a `seam-rpc.config.json` file at the root of your project and use the following data:
+```json
+{
+    "inputFiles": "./src/api/*",
+    "outputFolder": "../client/src/api"
+}
+```
+or you can automatically generate a file using `seam-rpc gen-config [input-files] [output-folder]`. If you don't specify the input files and output folder, it will use the default paths (see JSON above).

@@ -1,34 +1,56 @@
-#!/usr/bin/env node
-
 import fs from "fs";
 import ts, { Node } from "typescript";
 import path from "path";
 import fg from "fast-glob";
 
-main();
-
-async function main() {
+export async function genClient() {
     const args = process.argv;
+    let rawInputFiles;
+    let rawOutputFolder;
 
-    if (args.length != 5)
-        return console.error("Usage: seam-rpc gen-client <input-files> [output-folder]");
+    if (args.length == 3) {
+        if (!fs.existsSync("./seam-rpc.config.json"))
+            return console.error("\x1b[31mCommand arguments omitted and no config file found.\x1b[0m\n"
+                + "Either define a config file with \x1b[36mseam-rpc gen-config\x1b[0m or generate the client files using \x1b[36mseam-rpc gen-client <input-files> <output-folder>\x1b[0m.");
 
-    const inputFiles = await fg(args[3]);
-    const outputPath = args[4];
+        const config = JSON.parse(fs.readFileSync("./seam-rpc.config.json", "utf-8"));
+        rawInputFiles = config.inputFiles;
+        rawOutputFolder = config.outputFolder;
+    } else if (args.length == 5) {
+        rawInputFiles = args[3];
+        rawOutputFolder = args[4];
+    } else {
+        return console.error("Usage: seam-rpc gen-client <input-files> <output-folder>");
+    }
+
+    const inputFiles = await fg(rawInputFiles);
+    const outputPath = path.resolve(rawOutputFolder);
+    const rootPath = path.resolve(".");
 
     try {
+        const outputFiles: string[] = [];
+
         for (const inputFile of inputFiles) {
-            generateClientFile(inputFile, outputPath);
+            const outputFile = generateClientFile(inputFile, outputPath);
+            outputFiles.push(removeRootPath(outputFile, rootPath));
         }
 
-        console.log(`✅ Client files generated at ${outputPath}`);
+        console.log(
+            "\x1b[32m%s\x1b[0m\n\x1b[36m%s\x1b[0m",
+            `✅ Successfully generated client files at ${removeRootPath(outputPath, rootPath)}`,
+            `${outputFiles.join("\n")}`
+        );
     } catch (err: any) {
         console.error("❌ Failed to generate client file:", err.message);
         process.exit(1);
     }
 }
 
-function generateClientFile(inputFile: string, outputPath: string): void {
+function removeRootPath(path: string, rootPath: string) {
+    return "." + path.slice(rootPath.length);
+}
+
+function generateClientFile(inputFile: string, outputPath: string): string {
     const file = path.resolve(process.cwd(), inputFile);
 
     if (!fs.existsSync(file)) {
@@ -88,7 +110,7 @@ function generateClientFile(inputFile: string, outputPath: string): void {
 
     fs.writeFileSync(path.resolve(outputPath, path.basename(file)), content, "utf-8");
 
-    console.log(`✅ Client file generated: ${path.basename(file)}`);
+    return file;
 }
 
 function hasExportModifier(node: Node) {

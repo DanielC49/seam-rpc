@@ -12,9 +12,9 @@ const posts: Post[] = [];
 
 /**
  * Creates a post and returns its ID.
- * awdwad
- * @param title 
- * @param content 
+ * @param title The title of the post.
+ * @param content The conent of the post.
+ * @returns ID of the newly created post.
  */
 export function createPost(authorId: string, title: string, content: string): Promise<string> {
     return new Promise(async (resolve, reject) => {
@@ -40,6 +40,10 @@ export function createPost(authorId: string, title: string, content: string): Pr
     });
 }
 
+/**
+ * Gets the list of all posts.
+ * @returns Array of posts.
+ */
 export function getPosts(): Promise<Post[]> {
     return new Promise(async (resolve, reject) => {
         resolve(posts);

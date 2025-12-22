@@ -1,0 +1,4 @@
+{
+    "inputFiles": "./src/api/*",
+    "outputFolder": "../client/src/api"
+}
