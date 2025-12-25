@@ -19,3 +19,8 @@ function main() {
             console.log("Commands:\n- seam-rpc gen-client <input-files> <output-folder>\n- seam-rpc gen-config [input-files] [output-folder]");
     }
 }
+
+export interface SeamConfig {
+    inputFiles: string;
+    outputFolder: string;
+}

@@ -123,3 +123,8 @@ If you don't want to specify the input files and output folder every time you wa
 }
 ```
 or you can automatically generate a file using `seam-rpc gen-config [input-files] [output-folder]`. If you don't specify the input files and output folder, it will use the default paths (see JSON above).
+
+## Important notices
+- The generated client files contain all imports from the api implementation file in the backend that import from the current relative folder (`./`). This is the simplest way I have to include imports (at least for now). It may import functions and unused symbols but that shouldn't be too worrying.
+- Don't include backend/server functions inside the server api files.
+- Only exported functions will be included in the client generated files.

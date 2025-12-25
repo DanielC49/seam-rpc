@@ -1,11 +1,10 @@
-import { getUser } from "./users";
+import { getUser, User } from "./users";
 
 interface Post {
     id: string;
-    authorId: string;
+    author: User;
     title: string;
     content: string;
-    likes: number;
 }
 
 const posts: Post[] = [];
@@ -16,36 +15,27 @@ const posts: Post[] = [];
  * @param content The conent of the post.
  * @returns ID of the newly created post.
  */
-export function createPost(authorId: string, title: string, content: string): Promise<string> {
-    return new Promise(async (resolve, reject) => {
-        try {
-            const author = await getUser(authorId);
+export async function createPost(authorId: string, title: string, content: string): Promise<string> {
+    const author = await getUser(authorId);
 
-            if (!author)
-                reject();
+    if (author === undefined)
+        return Promise.reject();
 
-            const post: Post = {
-                id: Date.now().toString(),
-                authorId,
-                title,
-                content,
-                likes: 0
-            };
+    const post: Post = {
+        id: Date.now().toString(),
+        author,
+        title,
+        content,
+    };
 
-            posts.push(post);
-            resolve(post.id);
-        } catch (err) {
-            reject(err);
-        }
-    });
+    posts.push(post);
+    return post.id;
 }
 
 /**
  * Gets the list of all posts.
  * @returns Array of posts.
  */
-export function getPosts(): Promise<Post[]> {
-    return new Promise(async (resolve, reject) => {
-        resolve(posts);
-    });
+export async function getPosts(): Promise<Post[]> {
+    return posts;
 }

@@ -2,29 +2,29 @@ import fs from "fs";
 import ts, { Node } from "typescript";
 import path from "path";
 import fg from "fast-glob";
+import { SeamConfig } from ".";
 
 export async function genClient() {
     const args = process.argv;
-    let rawInputFiles;
-    let rawOutputFolder;
+    let config: SeamConfig;
 
     if (args.length == 3) {
         if (!fs.existsSync("./seam-rpc.config.json"))
             return console.error("\x1b[31mCommand arguments omitted and no config file found.\x1b[0m\n"
-                + "Either define a config file with \x1b[36mseam-rpc gen-config\x1b[0m or generate the client files using \x1b[36mseam-rpc gen-client <input-files> <output-folder>\x1b[0m.");
+                + "Either define a config file with \x1b[36mseam-rpc gen-config\x1b[0m or generate the client files using \x1b[36mseam-rpc gen-client <input-files> <output-folder> [global-types-file]\x1b[0m.");
 
-        const config = JSON.parse(fs.readFileSync("./seam-rpc.config.json", "utf-8"));
-        rawInputFiles = config.inputFiles;
-        rawOutputFolder = config.outputFolder;
-    } else if (args.length == 5) {
-        rawInputFiles = args[3];
-        rawOutputFolder = args[4];
+        config = JSON.parse(fs.readFileSync("./seam-rpc.config.json", "utf-8"));
+    } else if (args.length == 5 || args.length == 6) {
+        config = {
+            inputFiles: args[3],
+            outputFolder: args[4]
+        };
     } else {
         return console.error("Usage: seam-rpc gen-client <input-files> <output-folder>");
     }
 
-    const inputFiles = await fg(rawInputFiles);
-    const outputPath = path.resolve(rawOutputFolder);
+    const inputFiles = await fg(config.inputFiles);
+    const outputPath = path.resolve(config.outputFolder);
     const rootPath = path.resolve(".");
 
     try {
@@ -58,7 +58,7 @@ function generateClientFile(inputFile: string, outputPath: string): string {
         process.exit(1);
     }
 
-    const imports = ["import { callApi } from \"@seam-rpc/client\";\n"];
+    const imports = ["import { callApi, SeamFile } from \"@seam-rpc/client\";"];
     const apiDef: string[] = [];
     const typeDefs: string[] = [];
 
@@ -74,9 +74,13 @@ function generateClientFile(inputFile: string, outputPath: string): string {
     );
 
     ts.forEachChild(sourceFile, (node) => {
-        if (ts.isFunctionDeclaration(node)) {
+        if (ts.isImportDeclaration(node)) {
+            const moduleSpecifier = node.moduleSpecifier.getText().replace(/['"]/g, "");
+            if (moduleSpecifier.startsWith("./"))
+                imports.push(node.getText());
+        } else if (ts.isFunctionDeclaration(node) && hasExportModifier(node)) {
             if (!node.name) {
-                console.error("Missing function name");
+                console.error("Missing function name.");
                 process.exit(1);
             }
 
@@ -92,8 +96,11 @@ function generateClientFile(inputFile: string, outputPath: string): string {
                     return `${paramName}${optional}: ${type}`;
                 })
                 .join(", ");
-            const returnType = node.type ? node.type.getText() : "any";
-            signature += `${paramsText}): ${returnType} { return callApi("${routerName}", "${funcName}", { ${node.parameters.map(e => e.name.getText()).join(", ")} }); }`;
+            const returnTypeText = node.type?.getText() ?? "any";
+            const finalReturnType = returnTypeText.startsWith("Promise<")
+                ? returnTypeText
+                : `Promise<${returnTypeText}>`;
+            signature += `${paramsText}): ${finalReturnType} { return callApi("${routerName}", "${funcName}", [${node.parameters.map(e => e.name.getText()).join(", ")}]); }`;
 
             apiDef.push(signature);
         } else if (

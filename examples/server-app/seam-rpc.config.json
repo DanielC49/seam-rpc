@@ -1,4 +1,5 @@
 {
     "inputFiles": "./src/api/*",
-    "outputFolder": "../client-app/src/api"
+    "outputFolder": "../client-app/src/api",
+    "globalTypesFile": "types.ts"
 }

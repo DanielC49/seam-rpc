@@ -15,7 +15,8 @@
   "devDependencies": {
     "@types/express": "^5.0.3",
     "@types/node": "^24.3.1",
-    "express": "^5.1.0"
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
   },
   "dependencies": {
     "fast-glob": "^3.3.3",

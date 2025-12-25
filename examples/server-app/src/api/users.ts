@@ -1,3 +1,5 @@
+import { SeamFile } from "@seam-rpc/server";
+
 export interface User {
     id: string;
     name: string;
@@ -51,8 +53,9 @@ export function getUsers(): Promise<User[]> {
  * @param buffer The file buffer.
  * @returns void.
  */
-export function uploadFile(buffer: Buffer): Promise<void> {
+export function uploadFile(file: SeamFile): Promise<void> {
     return new Promise((resolve) => {
+        console.log(file)
         // (Upload file logic here.)
         resolve();
     });
