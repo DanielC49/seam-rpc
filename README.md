@@ -1,3 +1,5 @@
+<img width="1940" height="829" alt="image" src="https://github.com/user-attachments/assets/8a4a8a8b-1b57-4c1e-b6bb-ebab81ba8a32" />
+
 # SeamRPC
 
 ## About
