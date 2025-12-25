@@ -5,6 +5,7 @@
   "directories": {
     "example": "examples"
   },
+  "private": true,
   "workspaces": [
     "packages/*",
     "examples/*"

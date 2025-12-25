@@ -1,4 +1,8 @@
+import { SeamFile, ISeamFile, extractFiles, injectFiles } from "@seam-rpc/core";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
+import FormData from "form-data";
+
+export { SeamFile, ISeamFile };
 
 export interface RouterDefinition {
     [funcName: string]: (...args: any[]) => Promise<any>;
@@ -66,43 +70,32 @@ export class SeamSpace {
 
             try {
                 const result = await routerDefinition[req.params.funcName](...args);
-                res.send(JSON.stringify({ result }));
+                const { json, files, paths } = extractFiles({ result });
+
+                if (files.length === 0) {
+                    res.json(json);
+                    return;
+                }
+
+                const form = new FormData();
+                form.append("json", JSON.stringify(json));
+                form.append("paths", JSON.stringify(paths));
+
+                files.forEach((file, i) => {
+                    form.append(`file-${i}`, Buffer.from(file.data), {
+                        filename: file.fileName || `file-${i}`,
+                        contentType: file.mimeType || "application/octet-stream",
+                    });
+                });
+
+                res.writeHead(200, form.getHeaders());
+                form.pipe(res);
             } catch (error) {
+                console.log(error);
                 res.status(400).send({ error: String(error) });
             }
         });
 
         this.app.use(path, router);
-    }
-}
-
-export interface ISeamFile {
-    readonly data: Uint8Array;
-    readonly fileName?: string;
-    readonly mimeType?: string;
-}
-
-export class SeamFile implements ISeamFile {
-    constructor(
-        public readonly data: Uint8Array,
-        public readonly fileName?: string,
-        public readonly mimeType?: string
-    ) { }
-
-    public static fromJSON(data: ISeamFile): SeamFile {
-        return new SeamFile(data.data, data.fileName, data.mimeType);
-    }
-}
-
-function injectFiles(json: any, files: { path: (string | number)[], file: ISeamFile }[]) {
-    for (const file of files) {
-        let value = json;
-        for (let i = 0; i < file.path.length; i++) {
-            const key = file.path[i];
-            if (i < file.path.length - 1)
-                value = value[key];
-            else
-                value[key] = SeamFile.fromJSON(file.file);
-        }
     }
 }

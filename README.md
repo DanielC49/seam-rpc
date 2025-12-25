@@ -124,6 +124,33 @@ If you don't want to specify the input files and output folder every time you wa
 ```
 or you can automatically generate a file using `seam-rpc gen-config [input-files] [output-folder]`. If you don't specify the input files and output folder, it will use the default paths (see JSON above).
 
+## Uploading and downloading files
+Both server and client can send files seamlessly. Just use the SeamFile class for this. You can have a parameter as a file or an array/object containing a file. You can have deeply nested files inside objects.
+
+A SeamFile has 3 properties:
+- data - binary data
+- fileName (optional) - name of the file
+- mimeType (optional) - The MIME type of the file ([Learn more](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types))
+
+
+**Example:**
+````
+interface UserData {
+    id: string;
+    name: string;
+    avatar: SeamFile;
+}
+
+export async function updateUser(userId: string, userData: UserData): Promise<void> {
+    if (userData.avatar.mimeType != "image/png" && userData.avatar.mimeType != "image/jpeg")
+        throw new Error("Only PNGs and JPEGs allowed for avatar.");
+
+    users[userId].name = userData.name;
+    users[userId].avatar = userData.avatar.fileName;
+    writeFileSync(`../avatars/${userData.avatar.fileName}`, userData.avatar.data);
+}
+```
+
 ## Important notices
 - The generated client files contain all imports from the api implementation file in the backend that import from the current relative folder (`./`). This is the simplest way I have to include imports (at least for now). It may import functions and unused symbols but that shouldn't be too worrying.
 - Don't include backend/server functions inside the server api files.

@@ -1,4 +1,4 @@
-import { callApi, SeamFile } from "@seam-rpc/client";
+import { callApi, SeamFile, ISeamFile } from "@seam-rpc/client";
 export interface User {
     id: string;
     name: string;
@@ -25,4 +25,4 @@ export function getUsers(): Promise<User[]> { return callApi("users", "getUsers"
  * @param buffer The file buffer.
  * @returns void.
  */
-export function uploadFile(file: SeamFile): Promise<void> { return callApi("users", "uploadFile", [file]); }
+export function uploadFile(file: SeamFile): Promise<SeamFile> { return callApi("users", "uploadFile", [file]); }

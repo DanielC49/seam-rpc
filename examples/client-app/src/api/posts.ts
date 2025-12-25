@@ -1,4 +1,4 @@
-import { callApi, SeamFile } from "@seam-rpc/client";
+import { callApi, SeamFile, ISeamFile } from "@seam-rpc/client";
 import { getUser, User } from "./users";
 interface Post {
     id: string;

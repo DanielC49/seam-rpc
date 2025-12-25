@@ -1,4 +1,5 @@
 import { SeamFile } from "@seam-rpc/server";
+import { readFileSync, writeFileSync } from "fs";
 
 export interface User {
     id: string;
@@ -53,10 +54,7 @@ export function getUsers(): Promise<User[]> {
  * @param buffer The file buffer.
  * @returns void.
  */
-export function uploadFile(file: SeamFile): Promise<void> {
-    return new Promise((resolve) => {
-        console.log(file)
-        // (Upload file logic here.)
-        resolve();
-    });
+export async function uploadFile(file: SeamFile): Promise<SeamFile> {
+    console.log("Uploaded text file from client:", Buffer.from(file.data).toString())
+    return new SeamFile(readFileSync("./data/another-file.txt"));
 }
