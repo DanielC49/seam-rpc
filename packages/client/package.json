@@ -1,6 +1,6 @@
 {
   "name": "@seam-rpc/client",
-  "version": "1.0.4",
+  "version": "1.0.5",
   "main": "./dist/index.js",
   "files": [
     "dist"
@@ -26,6 +26,6 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@seam-rpc/core": "1.0.0"
+    "@seam-rpc/core": "^1.0.0"
   }
 }
