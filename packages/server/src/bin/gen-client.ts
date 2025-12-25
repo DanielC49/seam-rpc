@@ -104,9 +104,12 @@ function generateClientFile(inputFile: string, outputPath: string): string {
 
             apiDef.push(signature);
         } else if (
-            ts.isInterfaceDeclaration(node) ||
-            ts.isTypeAliasDeclaration(node) ||
-            ts.isEnumDeclaration(node)
+            (
+                ts.isInterfaceDeclaration(node) ||
+                ts.isTypeAliasDeclaration(node) ||
+                ts.isEnumDeclaration(node)
+            )
+            && hasExportModifier(node)
         ) {
             const text = node.getFullText(sourceFile).trim();
             typeDefs.push(text);

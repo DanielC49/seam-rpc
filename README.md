@@ -128,13 +128,13 @@ or you can automatically generate a file using `seam-rpc gen-config [input-files
 Both server and client can send files seamlessly. Just use the SeamFile class for this. You can have a parameter as a file or an array/object containing a file. You can have deeply nested files inside objects.
 
 A SeamFile has 3 properties:
-- data - binary data
-- fileName (optional) - name of the file
-- mimeType (optional) - The MIME type of the file ([Learn more](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types))
+- `data` - binary data
+- `fileName` (optional) - name of the file
+- `mimeType` (optional) - The MIME type of the file ([Learn more](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types))
 
 
 **Example:**
-````
+```ts
 interface UserData {
     id: string;
     name: string;
