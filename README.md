@@ -9,6 +9,8 @@ Making requests to the server is as simple as calling a function and SeamRPC sen
 ### Server
 Implement your API functions in a TypeScript file. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for the functions.
 
+> **Note:** For consistency reasons between server and client API functions, Seam RPC requires all API functions to return a Promise.
+
 **Example:**
 ```
 server-app
