@@ -5,6 +5,10 @@
   "bin": {
     "seam-rpc": "./dist/bin/index.js"
   },
+  "types": "dist/index.d.ts",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },
