@@ -68,8 +68,16 @@ export class SeamSpace {
                 injectFiles(args, files);
             }
 
+            let result;
             try {
-                const result = await routerDefinition[req.params.funcName](...args);
+                result = await routerDefinition[req.params.funcName](...args);
+            } catch (error) {
+                console.error(`Error at API function at router "${path}". Sent error to client.`, error);
+                res.status(400).send({ error: String(error) });
+                return;
+            }
+
+            try {
                 const { json, files, paths } = extractFiles({ result });
 
                 if (files.length === 0) {
@@ -91,8 +99,8 @@ export class SeamSpace {
                 res.writeHead(200, form.getHeaders());
                 form.pipe(res);
             } catch (error) {
-                console.log(error);
-                res.status(400).send({ error: String(error) });
+                console.error(`Internal error at API function at router "${path}". Returned 500 Internal Server Error to client.`, error);
+                res.status(500).send({ error: String(error) });
             }
         });
 

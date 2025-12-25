@@ -55,10 +55,11 @@ export async function callApi(routerName: string, funcName: string, args: any[])
     }
 
     if (!res.ok) {
-        if (res.status == 400)
-            throw new Error("Returned 400\n" + await res.json());
-        console.log(res);
-        throw new Error("Failed to parse JSON.");
+        if (res.status == 400) {
+            const resError = await res.json();
+            throw new Error(resError.error);
+        }
+        throw new Error(`Request failed with status ${res.status} ${res.statusText}.`);
     }
 
     const contentType = res.headers.get("content-type") || "";

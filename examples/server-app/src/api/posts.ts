@@ -1,6 +1,6 @@
 import { getUser, User } from "./users";
 
-interface Post {
+export interface Post {
     id: string;
     author: User;
     title: string;

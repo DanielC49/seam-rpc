@@ -7,7 +7,7 @@ Making requests to the server is as simple as calling a function and SeamRPC sen
 
 ## Setup
 ### Server
-Implement your API functions in a TypeScript file. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for the functions.
+Implement your API functions in a TypeScript file. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for the functions. The returned value of an API function is sent from the server to the client. If an error is thrown in the API function in the server, the function throws an error in the client as well (Seam RPC internally responds with HTTP code 400 which the client interprets as an error).
 
 > **Note:** For consistency reasons between server and client API functions, Seam RPC requires all API functions to return a Promise.
 
@@ -22,10 +22,7 @@ server-app
 
 `api/users.ts`
 ```ts
-/**
- * Interfaces and types
- * You can define interfaces and types (need to be exported)
- */
+import { SeamFile } from "@seam-rpc/server";
 
 export interface User {
     id: string;
@@ -39,15 +36,13 @@ const users: User[] = [];
  * @param name The name of the user.
  * @returns ID of the newly created user.
  */
-export function createUser(name: string): Promise<string> {
-    return new Promise(resolve => {
-        const user = {
-            id: Date.now().toString(),
-            name
-        };
-        users.push(user);
-        resolve(user.id);
-    });
+export async function createUser(name: string): Promise<string> {
+    const user = {
+        id: Date.now().toString(),
+        name
+    };
+    users.push(user);
+    return user.id;
 }
 
 /**
@@ -55,14 +50,12 @@ export function createUser(name: string): Promise<string> {
  * @param id The ID of the user.
  * @returns The user object.
  */
-export function getUser(id: string): Promise<User | undefined> {
-    return new Promise((resolve, reject) => {
-        const user = users.find(e => e.id == id);
-        if (user)
-            resolve(user);
-        else
-            reject("user not found");
-    });
+export async function getUser(id: string): Promise<User | undefined> {
+    const user = users.find(e => e.id == id);
+    if (user)
+        return user;
+    else
+        throw new Error("user not found");
 }
 ```
 

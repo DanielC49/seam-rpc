@@ -1,5 +1,5 @@
 import { SeamFile } from "@seam-rpc/server";
-import { readFileSync, writeFileSync } from "fs";
+import { readFileSync } from "fs";
 
 export interface User {
     id: string;
@@ -13,15 +13,13 @@ const users: User[] = [];
  * @param name The name of the user.
  * @returns ID of the newly created user.
  */
-export function createUser(name: string): Promise<string> {
-    return new Promise(resolve => {
-        const user = {
-            id: Date.now().toString(),
-            name
-        };
-        users.push(user);
-        resolve(user.id);
-    });
+export async function createUser(name: string): Promise<string> {
+    const user = {
+        id: Date.now().toString(),
+        name
+    };
+    users.push(user);
+    return user.id;
 }
 
 /**
@@ -29,24 +27,20 @@ export function createUser(name: string): Promise<string> {
  * @param id The ID of the user.
  * @returns The user object.
  */
-export function getUser(id: string): Promise<User | undefined> {
-    return new Promise((resolve, reject) => {
-        const user = users.find(e => e.id == id);
-        if (user)
-            resolve(user);
-        else
-            reject("user not found");
-    });
+export async function getUser(id: string): Promise<User | undefined> {
+    const user = users.find(e => e.id == id);
+    if (user)
+        return user;
+    else
+        throw new Error("user not found");
 }
 
 /**
  * Gets the list of all users.
  * @returns Array of users.
  */
-export function getUsers(): Promise<User[]> {
-    return new Promise((resolve) => {
-        resolve(users);
-    });
+export async function getUsers(): Promise<User[]> {
+    return users;
 }
 
 /**
