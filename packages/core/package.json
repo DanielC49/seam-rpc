@@ -1,8 +1,11 @@
 {
   "name": "@seam-rpc/core",
-  "version": "1.0.0",
+  "version": "1.0.2",
   "description": "",
   "main": "./dist/index.js",
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1"
   },

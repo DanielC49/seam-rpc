@@ -1,0 +1,144 @@
+<img width="1940" height="829" alt="image" src="https://github.com/user-attachments/assets/8a4a8a8b-1b57-4c1e-b6bb-ebab81ba8a32" />
+
+# SeamRPC
+
+## About
+SeamRPC is a simple RPC library for client-server communication using TypeScript using Express for the server.
+
+Making requests to the server is as simple as calling a function and SeamRPC sends it to server for you under the hood.
+
+## Setup
+### Server
+Implement your API functions in a TypeScript file. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for the functions. The returned value of an API function is sent from the server to the client. If an error is thrown in the API function in the server, the function throws an error in the client as well (Seam RPC internally responds with HTTP code 400 which the client interprets as an error).
+
+> **Note:** For consistency reasons between server and client API functions, Seam RPC requires all API functions to return a Promise.
+
+**Example:**
+```
+server-app
+  ├─ index.ts
+  └─ api
+     ├─ users.ts
+     └─ posts.ts
+```
+
+`api/users.ts`
+```ts
+import { SeamFile } from "@seam-rpc/server";
+
+export interface User {
+    id: string;
+    name: string;
+}
+
+const users: User[] = [];
+
+/**
+ * Creates a new user and returns its ID.
+ * @param name The name of the user.
+ * @returns ID of the newly created user.
+ */
+export async function createUser(name: string): Promise<string> {
+    const user = {
+        id: Date.now().toString(),
+        name
+    };
+    users.push(user);
+    return user.id;
+}
+
+/**
+ * Gets a user by ID.
+ * @param id The ID of the user.
+ * @returns The user object.
+ */
+export async function getUser(id: string): Promise<User | undefined> {
+    const user = users.find(e => e.id == id);
+    if (user)
+        return user;
+    else
+        throw new Error("user not found");
+}
+```
+
+### Client
+The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send an HTTP requests to the server. SeamRPC can automatically generate the client schema files. To do this, you can either run the command `seam-rpc gen-client <input-files> <output-folder>` or [define a config file](#config-file) and then run the command `seam-rpc gen-client`.
+
+- `input-files` - Specify what files to generate the client files from. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
+- `output-folder` - Specify the folder where to store the generated client api files.
+
+**Example:**
+`seam-rpc gen-client ./src/api/* ../server-app/src/api`
+
+```
+client-app
+  ├─ index.ts
+  └─ api
+     ├─ users.ts
+     └─ posts.ts
+```
+The api folder in the client contains the generated API client files, and should not be manually edited.
+
+The generated `api/users.ts` file:
+> Notice that the JSDoc comments are included in the client files.
+```ts
+import { callApi, SeamFile, ISeamFile } from "@seam-rpc/client";
+export interface User {
+    id: string;
+    name: string;
+}
+/**
+ * Creates a new user and returns its ID.
+ * @param name The name of the user.
+ * @returns ID of the newly created user.
+ */
+export function createUser(name: string): Promise<string> { return callApi("users", "createUser", [name]); }
+/**
+ * Gets a user by ID.
+ * @param id The ID of the user.
+ * @returns The user object.
+ */
+export function getUser(id: string): Promise<User | undefined> { return callApi("users", "getUser", [id]); }
+```
+
+### Config file
+If you don't want to specify the input files and output folder every time you want to generate the client files, you can create a config file where you define these paths. You can create a `seam-rpc.config.json` file at the root of your project and use the following data:
+```json
+{
+    "inputFiles": "./src/api/*",
+    "outputFolder": "../client/src/api"
+}
+```
+or you can automatically generate a file using `seam-rpc gen-config [input-files] [output-folder]`. If you don't specify the input files and output folder, it will use the default paths (see JSON above).
+
+## Uploading and downloading files
+Both server and client can send files seamlessly. Just use the SeamFile class for this. You can have a parameter as a file or an array/object containing a file. You can have deeply nested files inside objects.
+
+A SeamFile has 3 properties:
+- `data` - binary data
+- `fileName` (optional) - name of the file
+- `mimeType` (optional) - The MIME type of the file ([Learn more](https://developer.mozilla.org/en-US/docs/Web/HTTP/Guides/MIME_types))
+
+
+**Example:**
+```ts
+interface UserData {
+    id: string;
+    name: string;
+    avatar: SeamFile;
+}
+
+export async function updateUser(userId: string, userData: UserData): Promise<void> {
+    if (userData.avatar.mimeType != "image/png" && userData.avatar.mimeType != "image/jpeg")
+        throw new Error("Only PNGs and JPEGs allowed for avatar.");
+
+    users[userId].name = userData.name;
+    users[userId].avatar = userData.avatar.fileName;
+    writeFileSync(`../avatars/${userData.avatar.fileName}`, userData.avatar.data);
+}
+```
+
+## Important notices
+- The generated client files contain all imports from the api implementation file in the backend that import from the current relative folder (`./`). This is the simplest way I have to include imports (at least for now). It may import functions and unused symbols but that shouldn't be too worrying.
+- Don't include backend/server functions inside the server api files.
+- Only exported functions will be included in the client generated files.

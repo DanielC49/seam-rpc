@@ -2,6 +2,9 @@
   "name": "seam-rpc",
   "version": "1.0.0",
   "main": "index.js",
+  "files": [
+    "packages/**"
+  ],
   "directories": {
     "example": "examples"
   },
