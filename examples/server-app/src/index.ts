@@ -6,7 +6,7 @@ import { createSeamSpace } from "@seam-rpc/server";
 
 const app = express();
 
-const seamSpace = createSeamSpace(app);
+const seamSpace = await createSeamSpace(app);
 
 seamSpace.createRouter("/users", usersRouter);
 seamSpace.createRouter("/posts", postsRouter);

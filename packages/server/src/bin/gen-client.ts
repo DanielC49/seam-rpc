@@ -88,7 +88,8 @@ function generateClientFile(inputFile: string, outputPath: string): string {
             const jsDoc = ts.getJSDocCommentsAndTags(node).map(e => e.getFullText()).filter(Boolean).join("\n");
 
             let signature = `${jsDoc}\nexport function ${funcName}(`;
-            const paramsText = node.parameters
+            const params = node.parameters.filter(p => !(p.type && p.type.getText() === "SeamContext"));
+            const paramsText = params
                 .map((p) => {
                     const paramName = p.name.getText();
                     const optional = p.questionToken ? "?" : "";
@@ -97,10 +98,7 @@ function generateClientFile(inputFile: string, outputPath: string): string {
                 })
                 .join(", ");
             const returnTypeText = node.type?.getText() ?? "any";
-            const finalReturnType = returnTypeText.startsWith("Promise<")
-                ? returnTypeText
-                : `Promise<${returnTypeText}>`;
-            signature += `${paramsText}): ${finalReturnType} { return callApi("${routerName}", "${funcName}", [${node.parameters.map(e => e.name.getText()).join(", ")}]); }`;
+            signature += `${paramsText}): ${returnTypeText} { return callApi("${routerName}", "${funcName}", [${params.map(e => e.name.getText()).join(", ")}]); }`;
 
             apiDef.push(signature);
         } else if (

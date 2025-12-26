@@ -8,11 +8,11 @@ export interface RouterDefinition {
     [funcName: string]: (...args: any[]) => Promise<any>;
 };
 
-export function createSeamSpace(app: Express, fileHandler?: RequestHandler): SeamSpace {
+export async function createSeamSpace(app: Express, fileHandler?: RequestHandler): Promise<SeamSpace> {
     if (!fileHandler) {
         let multer: any;
         try {
-            multer = require("multer");
+            multer = (await import("multer")).default;
         } catch {
             throw new Error(
                 "Multer is required as default file handler. Install it or provide a custom fileHandler."
@@ -70,7 +70,12 @@ export class SeamSpace {
 
             let result;
             try {
-                result = await routerDefinition[req.params.funcName](...args);
+                const ctx: SeamContext = {
+                    request: req,
+                    response: res,
+                    next
+                };
+                result = await routerDefinition[req.params.funcName](...args, ctx);
             } catch (error) {
                 console.error(`Error at API function at router "${path}". Sent error to client.`, error);
                 res.status(400).send({ error: String(error) });
@@ -106,4 +111,10 @@ export class SeamSpace {
 
         this.app.use(path, router);
     }
+}
+
+export interface SeamContext {
+    request: Request;
+    response: Response;
+    next: NextFunction;
 }

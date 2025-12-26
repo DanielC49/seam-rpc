@@ -1,4 +1,4 @@
-import { SeamFile } from "@seam-rpc/server";
+import { SeamContext, SeamFile } from "@seam-rpc/server";
 import { readFileSync } from "fs";
 
 export interface User {
@@ -13,7 +13,8 @@ const users: User[] = [];
  * @param name The name of the user.
  * @returns ID of the newly created user.
  */
-export async function createUser(name: string): Promise<string> {
+export async function createUser(name: string, ctx: SeamContext): Promise<string> {
+    console.log("Request path:", ctx.request.originalUrl);
     const user = {
         id: Date.now().toString(),
         name

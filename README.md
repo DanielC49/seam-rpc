@@ -142,3 +142,42 @@ export async function updateUser(userId: string, userData: UserData): Promise<vo
 - The generated client files contain all imports from the api implementation file in the backend that import from the current relative folder (`./`). This is the simplest way I have to include imports (at least for now). It may import functions and unused symbols but that shouldn't be too worrying.
 - Don't include backend/server functions inside the server api files.
 - Only exported functions will be included in the client generated files.
+
+## Supported types
+SeamRPC supports the following types (at least for now):
+- `string`
+- `number`
+- `boolean`
+- `null`
+- `undefined`
+- arrays
+- objects
+
+Classes are technically supported, in that the data is serialized to JSON.
+
+Other JavaScript types are not supported, although SeamRPC doesn't prevent you from using them, in which case they might lead to unexpected beahviour or even errors.
+
+The Date object type is not supported (at least for now). However, you can use `number` and pass `Date.now()` or `string` and pass `new Date().toString()`. This is not different than a normal HTTP request using JSON. SeamRPC also uses JSON behind the scenes, that's why there's these limitations, which could be overcome but I've decided not to because it would probably add more overhead to the logic.
+
+## Context parameter
+
+### Server
+If you want, you can get access to the request, response and next function from Express. Just add a parameter of type SeamContext at the end of the API function. You can name the parameter whatever you like. This parameter is optional. This parameter is not included in the client generated files.
+
+Example:
+```ts
+export async function createUser(name: string, context: SeamContext): Promise<string> {
+    // Using the context to read the request path.
+    console.log("Request path:", context.request.originalUrl);
+
+    const user = {
+        id: Date.now().toString(),
+        name
+    };
+    users.push(user);
+    return user.id;
+}
+```
+
+### Client
+The client currently doesn't support access to the response object from the fetch.
