@@ -26,18 +26,24 @@ export async function genConfig() {
             }
             rl.close();
 
-            const config: SeamConfig = {
-                inputFiles,
-                outputFolder
-            };
-
-            try {
-                fs.writeFileSync("./seam-rpc.config.json", JSON.stringify(config, null, 4), "utf-8");
-            } catch (e) {
-                console.log("\x1b[31mFailed to generate config file ./seam-rpc.config.json\x1b[0m\n" + e);
-            }
-
-            console.log(`\x1b[32mSuccessfully generated config file ./seam-rpc.config.json\x1b[0m`);
+            generateConfig();
         });
+    } else {
+        generateConfig();
+    }
+
+    function generateConfig() {
+        const config: SeamConfig = {
+            inputFiles,
+            outputFolder
+        };
+
+        try {
+            fs.writeFileSync("./seam-rpc.config.json", JSON.stringify(config, null, 4), "utf-8");
+        } catch (e) {
+            console.log("\x1b[31mFailed to generate config file ./seam-rpc.config.json\x1b[0m\n" + e);
+        }
+
+        console.log(`\x1b[32mSuccessfully generated config file ./seam-rpc.config.json\x1b[0m`);
     }
 }
