@@ -89,9 +89,9 @@ export class SeamSpace {
                 form.append("json", JSON.stringify(json));
                 form.append("paths", JSON.stringify(paths));
 
-                files.forEach((file, i) => {
-                    form.append(`file-${i}`, Buffer.from(file.data), {
-                        filename: file.fileName || `file-${i}`,
+                files.forEach((file: SeamFile, index: number) => {
+                    form.append(`file-${index}`, Buffer.from(file.data), {
+                        filename: file.fileName || `file-${index}`,
                         contentType: file.mimeType || "application/octet-stream",
                     });
                 });

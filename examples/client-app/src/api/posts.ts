@@ -1,5 +1,5 @@
 import { callApi, SeamFile, ISeamFile } from "@seam-rpc/client";
-import { getUser, User } from "./users";
+import { getUser, User } from "./users.js";
 export interface Post {
     id: string;
     author: User;

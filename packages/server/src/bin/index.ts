@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { genClient } from "./gen-client";
-import { genConfig } from "./gen-config";
+import { genClient } from "./gen-client.js";
+import { genConfig } from "./gen-config.js";
 
 main();
 

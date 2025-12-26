@@ -2,7 +2,7 @@ import fs from "fs";
 import ts, { Node } from "typescript";
 import path from "path";
 import fg from "fast-glob";
-import { SeamConfig } from ".";
+import { SeamConfig } from "./index.js";
 
 export async function genClient() {
     const args = process.argv;

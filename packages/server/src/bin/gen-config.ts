@@ -1,6 +1,6 @@
 import fs from "fs";
 import readline from "readline";
-import { SeamConfig } from ".";
+import { SeamConfig } from "./index.js";
 
 export async function genConfig() {
     const args = process.argv;

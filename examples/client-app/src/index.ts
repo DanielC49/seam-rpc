@@ -1,7 +1,7 @@
 import { SeamFile, setApiUrl } from "@seam-rpc/client";
 import { readFileSync } from "fs";
-import * as user from "./api/users";
-import * as post from "./api/posts";
+import * as user from "./api/users.js";
+import * as post from "./api/posts.js";
 
 setApiUrl("http://localhost:3000");
 
