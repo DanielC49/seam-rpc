@@ -181,3 +181,25 @@ export async function createUser(name: string, context: SeamContext): Promise<st
 
 ### Client
 The client currently doesn't support access to the response object from the fetch.
+
+## Error handling
+
+### Server
+To catch errors across router functions in the server, you can use the `apiError` and `internalError` events.
+- `apiError` - Error ocurred when calling or during execution of your API function.
+- `internalError` - SeamRPC internal error. Please report if you find an error that seems like a bug or requires improvement.
+
+Example:
+```ts
+const seamSpace = await createSeamSpace(app);
+
+seamSpace.on("apiError", (error, context) => {
+    console.error(`API Error at ${context.functionName}!`, error);
+});
+
+seamSpace.on("internalError", (error, context) => {
+    console.error(`Internal Error at ${context.functionName}!`, error);
+});
+```
+
+> **Note:** The above example is to illustrate the use of error handlers is not a complete example. Please consult the rest of the README or the examples in the examples directory.

@@ -1,4 +1,5 @@
 import { SeamFile, ISeamFile, extractFiles, injectFiles } from "@seam-rpc/core";
+import EventEmitter from "events";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
 import FormData from "form-data";
 
@@ -25,10 +26,25 @@ export async function createSeamSpace(app: Express, fileHandler?: RequestHandler
     return new SeamSpace(app, fileHandler!);
 }
 
-export class SeamSpace {
+interface SeamErrorContext {
+    routerPath: string;
+    functionName: string;
+    request: Request;
+    response: Response;
+    next: NextFunction;
+};
+
+interface SeamSpaceEvents {
+    apiError: [error: unknown, context: SeamErrorContext];
+    internalError: [error: unknown, context: SeamErrorContext];
+}
+
+export class SeamSpace extends EventEmitter<SeamSpaceEvents> {
     private jsonParser = express.json();
 
-    constructor(private app: Express, private fileHandler: RequestHandler) { }
+    constructor(private app: Express, private fileHandler: RequestHandler) {
+        super();
+    }
 
     public createRouter(path: string, routerDefinition: RouterDefinition): void {
         const router = Router();
@@ -77,7 +93,13 @@ export class SeamSpace {
                 };
                 result = await routerDefinition[req.params.funcName](...args, ctx);
             } catch (error) {
-                console.error(`Error at API function at router "${path}". Sent error to client.`, error);
+                this.emit("apiError", error, {
+                    routerPath: path,
+                    functionName: req.params.funcName,
+                    request: req,
+                    response: res,
+                    next: next,
+                });
                 res.status(400).send({ error: String(error) });
                 return;
             }
@@ -104,7 +126,13 @@ export class SeamSpace {
                 res.writeHead(200, form.getHeaders());
                 form.pipe(res);
             } catch (error) {
-                console.error(`Internal error at API function at router "${path}". Returned 500 Internal Server Error to client.`, error);
+                this.emit("internalError", error, {
+                    routerPath: path,
+                    functionName: req.params.funcName,
+                    request: req,
+                    response: res,
+                    next: next,
+                });
                 res.status(500).send({ error: String(error) });
             }
         });

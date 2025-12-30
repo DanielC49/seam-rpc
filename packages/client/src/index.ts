@@ -91,5 +91,3 @@ export async function callApi(routerName: string, funcName: string, args: any[])
         return jsonPart.result;
     }
 }
-
-// console.log(JSON.stringify(extractFiles(["John", new SeamFile(new Uint8Array([1, 2, 3, 4]))]), null, 4))
