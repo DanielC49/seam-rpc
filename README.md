@@ -61,6 +61,34 @@ export async function getUser(id: string): Promise<User | undefined> {
 }
 ```
 
+#### Create a Seam Space
+
+A Seam Space is linked to an app in Express to which you define routers to. You define one for your API, which can then be separated in to different routers. Each router can be any kind of structure with functions (e.g. an object or a module). This example uses files.
+
+```ts
+import express from "express";
+import { createSeamSpace } from "@seam-rpc/server";
+
+// Import as modules
+import * as usersRouter from "./api/users.js";
+import * as postsRouter from "./api/posts.js";
+
+// Create express app
+const app = express();
+
+// Create Seam Space with express app
+const seamSpace = await createSeamSpace(app);
+
+// Create routers
+seamSpace.createRouter("/users", usersRouter);
+seamSpace.createRouter("/posts", postsRouter);
+
+// Start express server
+app.listen(3000, () => {
+    console.log("Listening on port 3000");
+});
+```
+
 ### Client
 The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send an HTTP requests to the server. SeamRPC can automatically generate the client schema files. To do this, you can either run the command `seam-rpc gen-client <input-files> <output-folder>` or [define a config file](#config-file) and then run the command `seam-rpc gen-client`.
 
@@ -99,6 +127,13 @@ export function createUser(name: string): Promise<string> { return callApi("user
  * @returns The user object.
  */
 export function getUser(id: string): Promise<User | undefined> { return callApi("users", "getUser", [id]); }
+```
+
+#### Connect client to server
+To establish the connection from the client to the server, you need to specify which URL to call. This example is using a self-hosted server running on port 3000 so it uses `http://localhost:3000`. Just call `setApiUrl` to set the URL.
+
+```ts
+setApiUrl("http://localhost:3000");
 ```
 
 ### Config file

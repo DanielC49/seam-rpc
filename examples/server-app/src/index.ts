@@ -1,8 +1,8 @@
 import express from "express";
+import { createSeamSpace } from "@seam-rpc/server";
 
 import * as usersRouter from "./api/users.js";
 import * as postsRouter from "./api/posts.js";
-import { createSeamSpace } from "@seam-rpc/server";
 
 const app = express();
 
