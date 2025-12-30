@@ -63,7 +63,7 @@ export async function getUser(id: string): Promise<User | undefined> {
 
 #### Create a Seam Space
 
-A Seam Space is linked to an app in Express to which you define routers to. You define one for your API, which can then be separated in to different routers. Each router can be any kind of structure with functions (e.g. an object or a module). This example uses files.
+A Seam Space is linked to an Express app and is what you defined routers to. You define one Seam Space for your API, which can then be separated in to different routers. Each router can be any kind of structure with functions (e.g. an object or a module). This example uses files as modules.
 
 ```ts
 import express from "express";
@@ -237,4 +237,4 @@ seamSpace.on("internalError", (error, context) => {
 });
 ```
 
-> **Note:** The above example is to illustrate the use of error handlers is not a complete example. Please consult the rest of the README or the examples in the examples directory.
+> **Note:** The above example is to illustrate the use of error handlers and is not a complete example. Please consult the rest of the README or the examples in the examples directory.

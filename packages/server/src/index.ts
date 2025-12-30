@@ -26,7 +26,7 @@ export async function createSeamSpace(app: Express, fileHandler?: RequestHandler
     return new SeamSpace(app, fileHandler!);
 }
 
-interface SeamErrorContext {
+export interface SeamErrorContext {
     routerPath: string;
     functionName: string;
     request: Request;
@@ -34,7 +34,7 @@ interface SeamErrorContext {
     next: NextFunction;
 };
 
-interface SeamSpaceEvents {
+export interface SeamSpaceEvents {
     apiError: [error: unknown, context: SeamErrorContext];
     internalError: [error: unknown, context: SeamErrorContext];
 }
