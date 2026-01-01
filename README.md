@@ -281,3 +281,5 @@ client.postRequest(ctx => {
     console.log(ctx.response.headers.get("X-SomeHeader"));
 });
 ```
+
+> You can add as many middleware functions as you like.

@@ -61,6 +61,34 @@ export async function getUser(id: string): Promise<User | undefined> {
 }
 ```
 
+#### Create a Seam Space
+
+A Seam Space is linked to an Express app and is what you defined routers to. You define one Seam Space for your API, which can then be separated in to different routers. Each router can be any kind of structure with functions (e.g. an object or a module). This example uses files as modules.
+
+```ts
+import express from "express";
+import { createSeamSpace } from "@seam-rpc/server";
+
+// Import as modules
+import * as usersRouter from "./api/users.js";
+import * as postsRouter from "./api/posts.js";
+
+// Create express app
+const app = express();
+
+// Create Seam Space with express app
+const seamSpace = await createSeamSpace(app);
+
+// Create routers
+seamSpace.createRouter("/users", usersRouter);
+seamSpace.createRouter("/posts", postsRouter);
+
+// Start express server
+app.listen(3000, () => {
+    console.log("Listening on port 3000");
+});
+```
+
 ### Client
 The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send an HTTP requests to the server. SeamRPC can automatically generate the client schema files. To do this, you can either run the command `seam-rpc gen-client <input-files> <output-folder>` or [define a config file](#config-file) and then run the command `seam-rpc gen-client`.
 
@@ -99,6 +127,13 @@ export function createUser(name: string): Promise<string> { return callApi("user
  * @returns The user object.
  */
 export function getUser(id: string): Promise<User | undefined> { return callApi("users", "getUser", [id]); }
+```
+
+#### Connect client to server
+To establish the connection from the client to the server, you need to specify which URL to call. This example is using a self-hosted server running on port 3000 so it uses `http://localhost:3000`. Just call `createClient` to create the client and specify the URL.
+
+```ts
+createClient("http://localhost:3000");
 ```
 
 ### Config file
@@ -181,3 +216,70 @@ export async function createUser(name: string, context: SeamContext): Promise<st
 
 ### Client
 The client currently doesn't support access to the response object from the fetch.
+
+## Error handling
+
+### Server
+To catch errors across router functions in the server, you can use the `apiError` and `internalError` events.
+- `apiError` - Error ocurred when calling or during execution of your API function.
+- `internalError` - SeamRPC internal error. Please report if you find an error that seems like a bug or requires improvement.
+
+Example:
+```ts
+const seamSpace = await createSeamSpace(app);
+
+seamSpace.on("apiError", (error, context) => {
+    console.error(`API Error at ${context.functionName}!`, error);
+});
+
+seamSpace.on("internalError", (error, context) => {
+    console.error(`Internal Error at ${context.functionName}!`, error);
+});
+```
+
+> **Note:** The above example is to illustrate the use of error handlers and is not a complete example. Please consult the rest of the README or the examples in the examples directory.
+
+## Middleware
+
+### Client
+You can add middleware functions in the client. There's two types:
+- Pre-request - Before the request is sent. You might for example want to add some header to the request.
+- Post-request - After the request was sent. You might for example want to read some header from reponse.
+
+There's two ways to add middleware, either when creating the client:
+```ts
+createClient("http://localhost:3000", {
+    middleware: {
+        request: [
+            ctx => {
+                ctx.request.headers = {
+                    ...ctx.request.headers,
+                    "X-MyHeader": "Test"
+                };
+            },
+        ],
+        response: [
+            ctx => {
+                console.log(ctx.response.headers.get("X-SomeHeader"));
+            }
+        ]
+    }
+});
+```
+... or after creating the client:
+```ts
+const client = createClient("http://localhost:3000");
+
+client.preRequest(ctx => {
+    ctx.request.headers = {
+        ...ctx.request.headers,
+        "X-MyHeader": "Test"
+    };
+});
+
+client.postRequest(ctx => {
+    console.log(ctx.response.headers.get("X-SomeHeader"));
+});
+```
+
+> You can add as many middleware functions as you like.
