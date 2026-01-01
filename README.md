@@ -130,10 +130,10 @@ export function getUser(id: string): Promise<User | undefined> { return callApi(
 ```
 
 #### Connect client to server
-To establish the connection from the client to the server, you need to specify which URL to call. This example is using a self-hosted server running on port 3000 so it uses `http://localhost:3000`. Just call `setApiUrl` to set the URL.
+To establish the connection from the client to the server, you need to specify which URL to call. This example is using a self-hosted server running on port 3000 so it uses `http://localhost:3000`. Just call `createClient` to create the client and specify the URL.
 
 ```ts
-setApiUrl("http://localhost:3000");
+createClient("http://localhost:3000");
 ```
 
 ### Config file
@@ -238,3 +238,46 @@ seamSpace.on("internalError", (error, context) => {
 ```
 
 > **Note:** The above example is to illustrate the use of error handlers and is not a complete example. Please consult the rest of the README or the examples in the examples directory.
+
+## Middleware
+
+### Client
+You can add middleware functions in the client. There's two types:
+- Pre-request - Before the request is sent. You might for example want to add some header to the request.
+- Post-request - After the request was sent. You might for example want to read some header from reponse.
+
+There's two ways to add middleware, either when creating the client:
+```ts
+createClient("http://localhost:3000", {
+    middleware: {
+        request: [
+            ctx => {
+                ctx.request.headers = {
+                    ...ctx.request.headers,
+                    "X-MyHeader": "Test"
+                };
+            },
+        ],
+        response: [
+            ctx => {
+                console.log(ctx.response.headers.get("X-SomeHeader"));
+            }
+        ]
+    }
+});
+```
+... or after creating the client:
+```ts
+const client = createClient("http://localhost:3000");
+
+client.preRequest(ctx => {
+    ctx.request.headers = {
+        ...ctx.request.headers,
+        "X-MyHeader": "Test"
+    };
+});
+
+client.postRequest(ctx => {
+    console.log(ctx.response.headers.get("X-SomeHeader"));
+});
+```

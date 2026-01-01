@@ -1,9 +1,25 @@
-import { SeamFile, setApiUrl } from "@seam-rpc/client";
+import { SeamFile, createClient } from "@seam-rpc/client";
 import { readFileSync } from "fs";
 import * as user from "./api/users.js";
 import * as post from "./api/posts.js";
 
-setApiUrl("http://localhost:3000");
+createClient("http://localhost:3000", {
+    middleware: {
+        request: [
+            ctx => {
+                ctx.request.headers = {
+                    ...ctx.request.headers,
+                    "X-MyHeader": "Test"
+                };
+            },
+        ],
+        response: [
+            ctx => {
+                console.log(ctx.response.headers.get("X-SomeHeader"));
+            }
+        ]
+    }
+});
 
 test();
 

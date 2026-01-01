@@ -2,49 +2,68 @@ import { SeamFile, ISeamFile, extractFiles, injectFiles } from "@seam-rpc/core";
 
 export { SeamFile, ISeamFile };
 
-let apiUrl: string | null = null;
+export type SeamRequestMiddleware = (context: SeamRequestMiddlewareContext) => void | Promise<void>;
+export type SeamResponseMiddleware = (context: SeamResponseMiddlewareContext) => void | Promise<void>;
 
-export function setApiUrl(url: string) {
-    apiUrl = url;
+export interface SeamRequestMiddlewareContext {
+    request: RequestInit;
+    routerName: string;
+    funcName: string;
+    args: any[];
+}
+
+export type SeamResponseMiddlewareContext = SeamRequestMiddlewareContext & {
+    response: Response;
+    parsedResponse: any;
+}
+
+export interface SeamClientOptions {
+    middleware?: {
+        request?: SeamRequestMiddleware[];
+        response?: SeamResponseMiddleware[];
+    }
+}
+
+export class SeamClient {
+    static _instance: SeamClient;
+
+    constructor(public readonly baseUrl: string, public readonly options?: SeamClientOptions) {
+        SeamClient._instance = this;
+    }
+
+    preRequest(middleware: SeamRequestMiddleware) {
+        this.options?.middleware?.request?.push(middleware);
+    }
+
+    postRequest(middleware: SeamResponseMiddleware) {
+        this.options?.middleware?.response?.push(middleware);
+    }
+}
+
+export function createClient(baseUrl: string, options?: SeamClientOptions): SeamClient {
+    return new SeamClient(baseUrl, options);
 }
 
 export async function callApi(routerName: string, funcName: string, args: any[]): Promise<any> {
-    if (!apiUrl)
-        throw new Error("Missing API URL");
+    if (!SeamClient._instance)
+        throw new Error("Seam Client not instantiated.");
 
-    let req: RequestInit;
+    const seamClient = SeamClient._instance;
 
-    const { json, files, paths } = extractFiles(args);
+    const req = buildRequest(args);
+    const url = `${seamClient.baseUrl}/${routerName}/${funcName}`;
 
-    if (files.length > 0) {
-        const formData = new FormData();
-
-        formData.append("json", JSON.stringify(json));
-        formData.append("paths", JSON.stringify(paths));
-
-        for (let i = 0; i < files.length; i++) {
-            const file = files[i];
-            const blob = new Blob([new Uint8Array(file.data)], {
-                type: file.mimeType || "application/octet-stream",
+    if (seamClient.options?.middleware?.request) {
+        for (const mw of seamClient.options.middleware.request) {
+            await mw({
+                request: req,
+                routerName,
+                funcName,
+                args,
             });
-            formData.append(`file-${i}`, blob, file.fileName || `file-${i}`);
         }
-
-        req = {
-            method: "POST",
-            body: formData,
-        };
-    } else {
-        req = {
-            method: "POST",
-            headers: {
-                "Content-Type": "application/json",
-            },
-            body: JSON.stringify(args),
-        };
     }
 
-    const url = `${apiUrl}/${routerName}/${funcName}`;
     let res: Response;
 
     try {
@@ -88,6 +107,55 @@ export async function callApi(routerName: string, funcName: string, args: any[])
 
         injectFiles(jsonPart, responseFiles);
 
+        if (seamClient.options?.middleware?.response) {
+            for (const mw of seamClient.options.middleware.response) {
+                await mw({
+                    request: req,
+                    response: res,
+                    parsedResponse: jsonPart.result,
+                    routerName,
+                    funcName,
+                    args,
+                });
+            }
+        }
+
         return jsonPart.result;
     }
+}
+
+function buildRequest(args: any[]): RequestInit {
+    let req: RequestInit;
+
+    const { json, files, paths } = extractFiles(args);
+
+    if (files.length > 0) {
+        const formData = new FormData();
+
+        formData.append("json", JSON.stringify(json));
+        formData.append("paths", JSON.stringify(paths));
+
+        for (let i = 0; i < files.length; i++) {
+            const file = files[i];
+            const blob = new Blob([new Uint8Array(file.data)], {
+                type: file.mimeType || "application/octet-stream",
+            });
+            formData.append(`file-${i}`, blob, file.fileName || `file-${i}`);
+        }
+
+        req = {
+            method: "POST",
+            body: formData,
+        };
+    } else {
+        req = {
+            method: "POST",
+            headers: {
+                "Content-Type": "application/json",
+            },
+            body: JSON.stringify(args),
+        };
+    }
+
+    return req;
 }

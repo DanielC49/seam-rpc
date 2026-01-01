@@ -15,6 +15,7 @@ const users: User[] = [];
  */
 export async function createUser(name: string, ctx: SeamContext): Promise<string> {
     console.log("Request path:", ctx.request.originalUrl);
+    console.log(ctx.request.headers);
     const user = {
         id: Date.now().toString(),
         name
