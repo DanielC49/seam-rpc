@@ -27,8 +27,16 @@ export interface SeamClientOptions {
 export class SeamClient {
     static _instance: SeamClient;
 
-    constructor(public readonly baseUrl: string, public readonly options?: SeamClientOptions) {
+    public options: SeamClientOptions;
+
+    constructor(public readonly baseUrl: string, options?: SeamClientOptions) {
         SeamClient._instance = this;
+        this.options = {
+            middleware: {
+                request: options?.middleware?.request || [],
+                response: options?.middleware?.response || [],
+            }
+        }
     }
 
     preRequest(middleware: SeamRequestMiddleware) {
@@ -78,7 +86,7 @@ export async function callApi(routerName: string, funcName: string, args: any[])
             const resError = await res.json();
             throw new Error(resError.error);
         }
-        throw new Error(`Request failed with status ${res.status} ${res.statusText}.`);
+        throw new Error(`Request failed at router ${routerName} at function ${funcName}, with status ${res.status} ${res.statusText}.`);
     }
 
     const contentType = res.headers.get("content-type") || "";
