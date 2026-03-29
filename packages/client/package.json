@@ -27,6 +27,6 @@
     "typescript": "^5.9.2"
   },
   "dependencies": {
-    "@seam-rpc/core": "file:../core"
+    "@seam-rpc/core": "*"
   }
 }

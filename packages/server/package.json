@@ -34,7 +34,7 @@
     "multer": "^2.0.2"
   },
   "dependencies": {
-    "@seam-rpc/core": "file:../core",
+    "@seam-rpc/core": "*",
     "fast-glob": "^3.3.3",
     "form-data": "^4.0.5",
     "typescript": "^5.9.3",
