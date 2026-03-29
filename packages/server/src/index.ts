@@ -1,12 +1,65 @@
-import { SeamFile, ISeamFile, extractFiles, injectFiles } from "@seam-rpc/core";
+import { extractFiles, injectFiles } from "@seam-rpc/core";
 import EventEmitter from "events";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
 import FormData from "form-data";
-
-export { SeamFile, ISeamFile };
+import { IncomingMessage, ServerResponse } from "http";
+import * as z from "zod";
 
 export interface RouterDefinition {
-    [funcName: string]: (...args: any[]) => Promise<any>;
+    [procName: string]: (...args: any[]) => Promise<any>;
+};
+
+export interface SeamContext {
+    request: Request;
+    response: Response;
+    next: NextFunction;
+}
+
+export interface SeamErrorContext {
+    routerPath: string;
+    procedureName: string;
+    input: Record<string, unknown>;
+    request: Request;
+    response: Response;
+    next: NextFunction;
+};
+
+export interface SeamEvents {
+    apiError: [error: unknown, context: SeamErrorContext];
+    internalError: [error: unknown, context: SeamErrorContext];
+    validationError: [error: unknown, context: SeamErrorContext];
+}
+
+type ProcedureHandler<Input extends ProcedureInput, Output extends z.ZodType> = (options: ProcedureOptions<Input>) => z.infer<Output> | Promise<z.infer<Output>>;
+type ProcedureInput = Record<string, z.ZodType>;
+type ProcedureOutput = z.ZodType;
+
+type ProcedureInputData<T extends ProcedureInput> = {
+    [K in keyof T]: z.infer<T[K]>;
+};
+
+interface ProcedureOptions<T extends ProcedureInput> {
+    input: Simplify<ProcedureInputData<T>>;
+    ctx: SeamContext;
+}
+
+type Simplify<T> = T extends object
+    ? { [K in keyof T]: Simplify<T[K]> }
+    : T;
+
+interface SeamProcedure<Input extends ProcedureInput, Output extends ProcedureOutput> {
+    input?: Input;
+    output?: Output;
+    handler?: ProcedureHandler<Input, Output>;
+}
+
+type ProcedureList = Record<string, SeamProcedure<any, any>>;
+
+export type ProcedureBuilder<Input extends ProcedureInput, Output extends ProcedureOutput> = {
+    _def: SeamProcedure<Input, Output>;
+    input: <T extends ProcedureInput>(schema: T) => ProcedureBuilder<T, Output>;
+    output: <T extends ProcedureOutput>(schema: T) => ProcedureBuilder<Input, T>;
+    handler: (handler: ProcedureHandler<Input, Output>) => ProcedureBuilder<Input, Output>;
 };
 
 export async function createSeamSpace(app: Express, fileHandler?: RequestHandler): Promise<SeamSpace> {
@@ -26,31 +79,41 @@ export async function createSeamSpace(app: Express, fileHandler?: RequestHandler
     return new SeamSpace(app, fileHandler!);
 }
 
-export interface SeamErrorContext {
-    routerPath: string;
-    functionName: string;
-    request: Request;
-    response: Response;
-    next: NextFunction;
-};
-
-export interface SeamSpaceEvents {
-    apiError: [error: unknown, context: SeamErrorContext];
-    internalError: [error: unknown, context: SeamErrorContext];
+export function seamProcedure(): ProcedureBuilder<ProcedureInput, ProcedureOutput> {
+    return createProcedureBuilder();
 }
 
-export class SeamSpace extends EventEmitter<SeamSpaceEvents> {
-    private jsonParser = express.json();
+function createProcedureBuilder(definition: SeamProcedure<ProcedureInput, ProcedureOutput> = {}): ProcedureBuilder<ProcedureInput, ProcedureOutput> {
+    return {
+        _def: definition,
+        input: schema => createProcedureBuilder({
+            ...definition,
+            input: schema,
+        }) as any,
+        output: schema => createProcedureBuilder({
+            ...definition,
+            output: schema,
+        }) as any,
+        handler: handler => createProcedureBuilder({
+            ...definition,
+            handler
+        }),
+    };
+}
 
-    constructor(private app: Express, private fileHandler: RequestHandler) {
+export class SeamRouter extends EventEmitter<SeamEvents> {
+    private router: Router;
+    private path: string;
+    private procedures: ProcedureList = {};
+
+    constructor(path: string, private app: Express, private jsonParser: (req: IncomingMessage, res: ServerResponse, next: NextFunction) => void, private fileHandler: RequestHandler) {
         super();
-    }
+        this.path = path;
+        this.router = Router();
 
-    public createRouter(path: string, routerDefinition: RouterDefinition): void {
-        const router = Router();
-
-        router.post("/:funcName", async (req: Request, res: Response, next: NextFunction) => {
-            if (!(req.params.funcName in routerDefinition))
+        this.router.post("/:procName", async (req: Request, res: Response, next: NextFunction) => {
+            const procedure = this.procedures[req.params.procName];
+            if (!procedure || !procedure.handler)
                 return res.sendStatus(404);
 
             const contentType = req.headers["content-type"] || "";
@@ -68,20 +131,37 @@ export class SeamSpace extends EventEmitter<SeamSpaceEvents> {
                 return res.status(415).send("Unsupported content type");
             }
 
-            let args: any[];
+            let input: Record<string, any>;
 
             if (contentType.startsWith("application/json")) {
-                args = req.body;
+                input = req.body;
             } else {
-                // multipart/form-data
-                args = JSON.parse(req.body.json);
+                // multipart/form-data (already checked above)
+                input = JSON.parse(req.body.json);
                 const paths = JSON.parse(req.body.paths);
                 const files = (req.files ?? []).map((file: any, index: number) => ({
                     path: paths[index],
-                    file: new SeamFile(file.buffer, file.originalname, file.mimetype),
+                    file: new File([file.buffer], file.originalname, { type: file.mimetype }),
                 }));
 
-                injectFiles(args, files);
+                injectFiles(input, files);
+            }
+
+            let validatedInput: Record<string, unknown> | null;
+
+            try {
+                validatedInput = this.validateInput(input, procedure.input);
+            } catch (err) {
+                this.emit("validationError", err, {
+                    routerPath: path,
+                    procedureName: req.params.procName,
+                    input,
+                    request: req,
+                    response: res,
+                    next: next,
+                });
+                res.sendStatus(400);
+                return;
             }
 
             let result;
@@ -91,11 +171,12 @@ export class SeamSpace extends EventEmitter<SeamSpaceEvents> {
                     response: res,
                     next
                 };
-                result = await routerDefinition[req.params.funcName](...args, ctx);
+                result = await procedure.handler({ input: validatedInput!, ctx });
             } catch (error) {
                 this.emit("apiError", error, {
                     routerPath: path,
-                    functionName: req.params.funcName,
+                    procedureName: req.params.procName,
+                    input,
                     request: req,
                     response: res,
                     next: next,
@@ -116,33 +197,63 @@ export class SeamSpace extends EventEmitter<SeamSpaceEvents> {
                 form.append("json", JSON.stringify(json));
                 form.append("paths", JSON.stringify(paths));
 
-                files.forEach((file: SeamFile, index: number) => {
-                    form.append(`file-${index}`, Buffer.from(file.data), {
-                        filename: file.fileName || `file-${index}`,
-                        contentType: file.mimeType || "application/octet-stream",
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    const buffer = Buffer.from(await file.arrayBuffer());
+                    form.append(`file-${i}`, buffer, {
+                        filename: file.name || `file-${i}`,
+                        contentType: file.type || "application/octet-stream",
                     });
-                });
+                }
 
                 res.writeHead(200, form.getHeaders());
                 form.pipe(res);
             } catch (error) {
                 this.emit("internalError", error, {
                     routerPath: path,
-                    functionName: req.params.funcName,
+                    procedureName: req.params.procName,
+                    input,
                     request: req,
                     response: res,
                     next: next,
                 });
-                res.status(500).send({ error: String(error) });
+                console.log("INTERNAL ERROR", error)
+                res.sendStatus(500); //.send({ error: String(error) });
             }
         });
 
-        this.app.use(path, router);
+        this.app.use(path, this.router);
+    }
+
+    private validateInput(input?: Record<string, any>, procInput?: ProcedureInput) {
+        if (!procInput) {
+            if (input)
+                throw new Error("No input expected.");
+            return null;
+        }
+
+        if (!input)
+            throw new Error("Input expected.");
+
+        const schema = z.object(procInput);
+        return schema.parse(input);
+    }
+
+    public addProcedures(procedures: Record<string, ProcedureBuilder<any, any>>) {
+        for (const proc in procedures) {
+            this.procedures[proc] = procedures[proc]._def;
+        }
     }
 }
 
-export interface SeamContext {
-    request: Request;
-    response: Response;
-    next: NextFunction;
+export class SeamSpace extends EventEmitter<SeamEvents> {
+    private jsonParser = express.json();
+
+    constructor(private app: Express, private fileHandler: RequestHandler) {
+        super();
+    }
+
+    public createRouter(path: string): SeamRouter {
+        return new SeamRouter(path, this.app, this.jsonParser, this.fileHandler);
+    }
 }

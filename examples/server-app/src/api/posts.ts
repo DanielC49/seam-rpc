@@ -1,4 +1,7 @@
-import { getUser, User } from "./users.js";
+import { seamProcedure } from "@seam-rpc/server";
+import { getUser, users } from "./users.js";
+import type { User } from "./users.js";
+import z from "zod";
 
 export interface Post {
     id: string;
@@ -15,27 +18,37 @@ const posts: Post[] = [];
  * @param content The conent of the post.
  * @returns ID of the newly created post.
  */
-export async function createPost(authorId: string, title: string, content: string): Promise<string> {
-    const author = await getUser(authorId);
+const createPost = seamProcedure()
+    .input({
+        authorId: z.string(),
+        title: z.string().max(100),
+        content: z.string().max(500),
+    })
+    .output(z.string())
+    .handler(({ input }) => {
+        const author = users.find(e => e.id == input.authorId);
 
-    if (author === undefined)
-        return Promise.reject();
+        if (author === undefined)
+            return Promise.reject();
 
-    const post: Post = {
-        id: Date.now().toString(),
-        author,
-        title,
-        content,
-    };
+        const post: Post = {
+            id: Date.now().toString(),
+            author,
+            title: input.title,
+            content: input.content,
+        };
 
-    posts.push(post);
-    return post.id;
-}
+        posts.push(post);
+        return post.id;
+    });
 
 /**
  * Gets the list of all posts.
  * @returns Array of posts.
  */
-export async function getPosts(): Promise<Post[]> {
-    return posts;
-}
+const getPosts = seamProcedure()
+    .handler(({ input }) => {
+        return posts;
+    });
+
+export default { createPost, getPosts };

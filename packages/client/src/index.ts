@@ -1,6 +1,4 @@
-import { SeamFile, ISeamFile, extractFiles, injectFiles } from "@seam-rpc/core";
-
-export { SeamFile, ISeamFile };
+import { extractFiles, injectFiles } from "@seam-rpc/core";
 
 export type SeamRequestMiddleware = (context: SeamRequestMiddlewareContext) => void | Promise<void>;
 export type SeamResponseMiddleware = (context: SeamResponseMiddlewareContext) => void | Promise<void>;
@@ -9,7 +7,7 @@ export interface SeamRequestMiddlewareContext {
     request: RequestInit;
     routerName: string;
     funcName: string;
-    args: any[];
+    input: Record<string, any>;
 }
 
 export type SeamResponseMiddlewareContext = SeamRequestMiddlewareContext & {
@@ -52,13 +50,13 @@ export function createClient(baseUrl: string, options?: SeamClientOptions): Seam
     return new SeamClient(baseUrl, options);
 }
 
-export async function callApi(routerName: string, funcName: string, args: any[]): Promise<any> {
+export async function callApi(routerName: string, funcName: string, input: Record<string, any>): Promise<any> {
     if (!SeamClient._instance)
         throw new Error("Seam Client not instantiated.");
 
     const seamClient = SeamClient._instance;
 
-    const req = buildRequest(args);
+    const req = buildRequest(input);
     const url = `${seamClient.baseUrl}/${routerName}/${funcName}`;
 
     if (seamClient.options?.middleware?.request) {
@@ -67,7 +65,7 @@ export async function callApi(routerName: string, funcName: string, args: any[])
                 request: req,
                 routerName,
                 funcName,
-                args,
+                input,
             });
         }
     }
@@ -99,16 +97,15 @@ export async function callApi(routerName: string, funcName: string, args: any[])
         const jsonPart = JSON.parse(formData.get("json")?.toString() || "[]");
         const pathsPart: (string | number)[][] = JSON.parse(formData.get("paths")?.toString() || "[]");
 
-        const responseFiles: { path: (string | number)[]; file: SeamFile }[] = [];
+        const responseFiles: { path: (string | number)[]; file: File }[] = [];
 
         for (const [key, value] of formData.entries()) {
             if (key.startsWith("file-")) {
                 const index = parseInt(key.replace("file-", ""));
                 const blob = value as Blob;
-                const arrayBuffer = await blob.arrayBuffer();
                 responseFiles.push({
                     path: pathsPart[index],
-                    file: new SeamFile(new Uint8Array(arrayBuffer), (blob as any).name, blob.type),
+                    file: new File([blob], (blob as any).name),
                 });
             }
         }
@@ -123,7 +120,7 @@ export async function callApi(routerName: string, funcName: string, args: any[])
                     parsedResponse: jsonPart.result,
                     routerName,
                     funcName,
-                    args,
+                    input,
                 });
             }
         }
@@ -132,10 +129,10 @@ export async function callApi(routerName: string, funcName: string, args: any[])
     }
 }
 
-function buildRequest(args: any[]): RequestInit {
+function buildRequest(input: Record<string, any>): RequestInit {
     let req: RequestInit;
 
-    const { json, files, paths } = extractFiles(args);
+    const { json, files, paths } = extractFiles(input);
 
     if (files.length > 0) {
         const formData = new FormData();
@@ -145,10 +142,7 @@ function buildRequest(args: any[]): RequestInit {
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];
-            const blob = new Blob([new Uint8Array(file.data)], {
-                type: file.mimeType || "application/octet-stream",
-            });
-            formData.append(`file-${i}`, blob, file.fileName || `file-${i}`);
+            formData.append(`file-${i}`, file, file.name || `file-${i}`);
         }
 
         req = {
@@ -161,7 +155,7 @@ function buildRequest(args: any[]): RequestInit {
             headers: {
                 "Content-Type": "application/json",
             },
-            body: JSON.stringify(args),
+            body: JSON.stringify(input),
         };
     }
 

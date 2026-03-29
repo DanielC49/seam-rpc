@@ -1,3 +1,62 @@
+export class ValString implements SeamValueString {
+    private _value: string;
+    private _isValid: boolean = true;
+
+    constructor(value: string) {
+        this._value = value;
+    }
+
+    get isValid(): boolean {
+        return this._isValid;
+    }
+
+    min(value: number): SeamValueString {
+        if (this._isValid)
+            this._isValid = this._value.length >= value;
+        return this;
+    }
+
+    max(value: number): SeamValueString {
+        if (this._isValid)
+            this._isValid = this._value.length <= value;
+        return this;
+    }
+
+    length(value: number): SeamValueString {
+        if (this._isValid)
+            this._isValid = this._value.length == value;
+        return this;
+    }
+
+    startsWith(value: string): SeamValueString {
+        if (this._isValid)
+            this._isValid = this._value.startsWith(value);
+        return this;
+    }
+
+    endsWith(value: string): SeamValueString {
+         if (this._isValid)
+            this._isValid = this._value.endsWith(value);
+        return this;
+    }
+
+    includes(value: string): SeamValueString {
+         if (this._isValid)
+            this._isValid = this._value.includes(value);
+        return this;
+    }
+
+    regex(regExpr: string | RegExp): SeamValueString {
+        //  if (this._isValid)
+        //     this._isValid = this._value.startsWith(value);
+        return this;
+    }
+
+    email(): SeamValueString {
+        return this;
+    }
+}
+
 type Val<T> =
     (
         T extends string ?
@@ -52,4 +111,14 @@ function createUser(name: Val<string>, age: Val<number>, data: Val<UserData>) {
     name.min(3).max(50);
     age.gte(1).lt(150);
     data.description?.max(250);
+}
+
+interface ValidationData {
+    [paramName:string]: {
+        
+    }
+}
+
+function validate(data: ValidationData) {
+
 }
