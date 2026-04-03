@@ -7,9 +7,9 @@ SeamRPC is a simple RPC library for client-server communication using TypeScript
 
 Making requests to the server is as simple as calling a function and SeamRPC sends it to server for you under the hood.
 
-## Setup
+## Quick start
 ### Server
-Implement your API functions in a TypeScript file. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for the functions. The returned value of an API function is sent from the server to the client. If an error is thrown in the API function in the server, the function throws an error in the client as well (Seam RPC internally responds with HTTP code 400 which the client interprets as an error).
+Implement your API procedures in a TypeScript file. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for the functions. The returned value of an API function is sent from the server to the client. If an error is thrown in the API function in the server, the function throws an error in the client as well (Seam RPC internally responds with HTTP code 400 which the client interprets as an error).
 
 > **Note:** For consistency reasons between server and client API functions, Seam RPC requires all API functions to return a Promise.
 
@@ -22,45 +22,6 @@ server-app
      └─ posts.ts
 ```
 
-`api/users.ts`
-```ts
-import { SeamFile } from "@seam-rpc/server";
-
-export interface User {
-    id: string;
-    name: string;
-}
-
-const users: User[] = [];
-
-/**
- * Creates a new user and returns its ID.
- * @param name The name of the user.
- * @returns ID of the newly created user.
- */
-export async function createUser(name: string): Promise<string> {
-    const user = {
-        id: Date.now().toString(),
-        name
-    };
-    users.push(user);
-    return user.id;
-}
-
-/**
- * Gets a user by ID.
- * @param id The ID of the user.
- * @returns The user object.
- */
-export async function getUser(id: string): Promise<User | undefined> {
-    const user = users.find(e => e.id == id);
-    if (user)
-        return user;
-    else
-        throw new Error("user not found");
-}
-```
-
 #### Create a Seam Space
 
 A Seam Space is linked to an Express app and is what you defined routers to. You define one Seam Space for your API, which can then be separated in to different routers. Each router can be any kind of structure with functions (e.g. an object or a module). This example uses files as modules.
@@ -69,24 +30,82 @@ A Seam Space is linked to an Express app and is what you defined routers to. You
 import express from "express";
 import { createSeamSpace } from "@seam-rpc/server";
 
-// Import as modules
-import * as usersRouter from "./api/users.js";
-import * as postsRouter from "./api/posts.js";
+// Import procedure definitions
+import usersRouter from "./api/users.js";
 
-// Create express app
 const app = express();
-
-// Create Seam Space with express app
 const seamSpace = await createSeamSpace(app);
 
-// Create routers
-seamSpace.createRouter("/users", usersRouter);
-seamSpace.createRouter("/posts", postsRouter);
+seamSpace.createRouter("/users").addProcedures(usersRouter);
 
 // Start express server
 app.listen(3000, () => {
     console.log("Listening on port 3000");
 });
+
+```
+
+`api/users.ts`
+```ts
+import { seamProcedure } from "@seam-rpc/server";
+import { readFileSync } from "fs";
+import z from "zod";
+
+export interface User {
+    id: string;
+    name: string;
+    age: number;
+}
+
+export const outputUser = z.object({
+    id: z.string(),
+    name: z.string(),
+    age: z.int(),
+});
+
+export const users: User[] = [];
+
+/**
+ * Creates a new user and returns its ID.
+ * @param name The name of the user.
+ * @returns ID of the newly created user.
+ */
+const createUser = seamProcedure()
+    .input({
+        name: z.string().min(3).max(200),
+        age: z.int().min(1).max(150),
+    })
+    .output(outputUser)
+    .handler(({ input, ctx }) => {
+        console.log("Request path:", ctx.request.originalUrl);
+        console.log(ctx.request.headers);
+
+        const user = {
+            id: Date.now().toString(),
+            name: input.name,
+            age: input.age,
+        };
+
+        users.push(user);
+
+        return user;
+    });
+
+/**
+ * Gets a user by ID.
+ * @param id The ID of the user.
+ * @returns The user object.
+ */
+export const getUser = seamProcedure()
+    .input({ id: z.string() })
+    .output(outputUser.or(z.undefined()))
+    .handler(({ input }) => {
+        const user = users.find(e => e.id == input.id);
+        if (user)
+            return user;
+        else
+            throw new Error("user not found");
+    });
 ```
 
 ### Client

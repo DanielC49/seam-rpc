@@ -1,4 +1,4 @@
-import { SeamContext, seamProcedure } from "@seam-rpc/server";
+import { seamProcedure } from "@seam-rpc/server";
 import { readFileSync } from "fs";
 import z from "zod";
 
@@ -23,8 +23,8 @@ export const users: User[] = [];
  */
 const createUser = seamProcedure()
     .input({
-        name: z.string().default("hello!"),
-        age: z.int(),
+        name: z.string().min(3).max(200),
+        age: z.int().min(1).max(150),
     })
     .output(outputUser)
     .handler(({ input, ctx }) => {
@@ -33,7 +33,7 @@ const createUser = seamProcedure()
 
         const user = {
             id: Date.now().toString(),
-            name: input.name ?? "",
+            name: input.name,
             age: input.age,
         };
 

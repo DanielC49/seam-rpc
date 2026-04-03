@@ -27,7 +27,8 @@ export interface SeamErrorContext {
 export interface SeamEvents {
     apiError: [error: unknown, context: SeamErrorContext];
     internalError: [error: unknown, context: SeamErrorContext];
-    validationError: [error: unknown, context: SeamErrorContext];
+    inputValidationError: [error: unknown, context: SeamErrorContext];
+    outputValidationError: [error: unknown, context: SeamErrorContext];
 }
 
 type ProcedureHandler<Input extends ProcedureInput, Output extends z.ZodType> = (options: ProcedureOptions<Input>) => z.infer<Output> | Promise<z.infer<Output>>;
@@ -149,10 +150,11 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
 
             let validatedInput: Record<string, unknown> | null;
 
+            // Validate input
             try {
-                validatedInput = this.validateInput(input, procedure.input);
+                validatedInput = this.validateData(input, procedure.input);
             } catch (err) {
-                this.emit("validationError", err, {
+                this.emit("inputValidationError", err, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
@@ -164,14 +166,15 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
                 return;
             }
 
-            let result;
+            let output;
+            const ctx: SeamContext = {
+                request: req,
+                response: res,
+                next
+            };
+            // Call procedure
             try {
-                const ctx: SeamContext = {
-                    request: req,
-                    response: res,
-                    next
-                };
-                result = await procedure.handler({ input: validatedInput!, ctx });
+                output = await procedure.handler({ input: validatedInput!, ctx });
             } catch (error) {
                 this.emit("apiError", error, {
                     routerPath: path,
@@ -185,8 +188,24 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
                 return;
             }
 
+            // Validate output
             try {
-                const { json, files, paths } = extractFiles({ result });
+                validatedInput = this.validateData(output, procedure.output);
+            } catch (err) {
+                this.emit("outputValidationError", err, {
+                    routerPath: path,
+                    procedureName: req.params.procName,
+                    input,
+                    request: req,
+                    response: res,
+                    next: next,
+                });
+                res.sendStatus(400);
+                return;
+            }
+
+            try {
+                const { json, files, paths } = extractFiles({ result: output });
 
                 if (files.length === 0) {
                     res.json(json);
@@ -225,18 +244,18 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
         this.app.use(path, this.router);
     }
 
-    private validateInput(input?: Record<string, any>, procInput?: ProcedureInput) {
-        if (!procInput) {
-            if (input)
-                throw new Error("No input expected.");
+    private validateData(data?: Record<string, any>, dataSchema?: ProcedureInput) {
+        if (!dataSchema) {
+            if (data)
+                throw new Error("No data expected.");
             return null;
         }
 
-        if (!input)
-            throw new Error("Input expected.");
+        if (!data)
+            throw new Error("Data expected.");
 
-        const schema = z.object(procInput);
-        return schema.parse(input);
+        const schema = z.object(dataSchema);
+        return schema.parse(data);
     }
 
     public addProcedures(procedures: Record<string, ProcedureBuilder<any, any>>) {
