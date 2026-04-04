@@ -88,7 +88,7 @@ export const getUser = seamProcedure()
 export default { createUser, getUser };
 ```
 A procedure's input and output can be validated using the zod library.
-> :warn: Make sure you implement proper validation, because without it the client is able to send any kind of data.
+> :warning: Make sure you implement proper validation, because without it the client is able to send any kind of data.
 
 ### Create a Seam Space
 
