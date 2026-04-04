@@ -8,11 +8,7 @@ export interface User {
     age: number;
 }
 
-export const outputUser = z.object({
-    id: z.string(),
-    name: z.string(),
-    age: z.int(),
-});
+export const outputUser = z.object<User>();
 
 export const users: User[] = [];
 

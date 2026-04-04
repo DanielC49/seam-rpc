@@ -1,19 +1,21 @@
 <img width="1940" height="829" alt="image" src="https://github.com/user-attachments/assets/8a4a8a8b-1b57-4c1e-b6bb-ebab81ba8a32" />
 
-# SeamRPC
-
-## About
-SeamRPC is a simple RPC library for client-server communication using TypeScript using Express for the server.
+# About
+SeamRPC is a simple RPC library for client-server communication using TypeScript and an Express server.
 
 Making requests to the server is as simple as calling a function and SeamRPC sends it to server for you under the hood.
 
-## Quick start
-### Server
-Implement your API procedures in a TypeScript file. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for the functions. The returned value of an API function is sent from the server to the client. If an error is thrown in the API function in the server, the function throws an error in the client as well (Seam RPC internally responds with HTTP code 400 which the client interprets as an error).
+# Quick start
+This guide will help you build a simple server and client with users and posts to demonstrate how to use the most essential features of SeamRPC. Check the rest of the documentation for more details and information regarding all of the features SeamRPC has to offer.
 
-> **Note:** For consistency reasons between server and client API functions, Seam RPC requires all API functions to return a Promise.
+## Server
+Each function/endpoint is called a procedure. It can accept input and can return output. You can group procedures in to different routes. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for each procedure. The returned value of an API procedure is sent from the server to the client. If an error is thrown in the API procedure in the server, the function throws an error in the client as well (Seam RPC internally responds with HTTP code 400 which the client interprets as an error).
 
-**Example:**
+> **Note:** For consistency reasons between server and client API procedures, Seam RPC requires all API functions to return a Promise.
+
+### Folder structure
+Let's start by defining the following folder structure.
+
 ```
 server-app
   ├─ index.ts
@@ -22,28 +24,8 @@ server-app
      └─ posts.ts
 ```
 
-#### Create a Seam Space
-
-A Seam Space is linked to an Express app and is what you defined routers to. You define one Seam Space for your API, which can then be separated in to different routers. Each router can be any kind of structure with functions (e.g. an object or a module). This example uses files as modules.
-
-```ts
-import express from "express";
-import { createSeamSpace } from "@seam-rpc/server";
-
-// Import procedure definitions
-import usersRouter from "./api/users.js";
-
-const app = express();
-const seamSpace = await createSeamSpace(app);
-
-seamSpace.createRouter("/users").addProcedures(usersRouter);
-
-// Start express server
-app.listen(3000, () => {
-    console.log("Listening on port 3000");
-});
-
-```
+### Define API router procedures
+Implement your API procedures in a TypeScript file.
 
 `api/users.ts`
 ```ts
@@ -57,11 +39,7 @@ export interface User {
     age: number;
 }
 
-export const outputUser = z.object({
-    id: z.string(),
-    name: z.string(),
-    age: z.int(),
-});
+export const outputUser = z.object<User>();
 
 export const users: User[] = [];
 
@@ -106,9 +84,35 @@ export const getUser = seamProcedure()
         else
             throw new Error("user not found");
     });
+
+export default { createUser, getUser };
+```
+A procedure's input and output can be validated using the zod library.
+> :warn: Make sure you implement proper validation, because without it the client is able to send any kind of data.
+
+### Create a Seam Space
+
+A Seam Space is linked to an Express app and is what you defined routers to. You define one Seam Space for your API, which can then be separated in to different routers. Each router can be any kind of structure with functions (e.g. an object or a module). This example uses files as modules.
+
+```ts
+import express from "express";
+import { createSeamSpace } from "@seam-rpc/server";
+
+// Import procedure definitions
+import usersRouter from "./api/users.js";
+
+const app = express();
+const seamSpace = await createSeamSpace(app);
+
+seamSpace.createRouter("/users").addProcedures(usersRouter);
+
+// Start express server
+app.listen(3000, () => {
+    console.log("Listening on port 3000");
+});
 ```
 
-### Client
+## Client
 The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send an HTTP requests to the server. SeamRPC can automatically generate the client schema files. To do this, you can either run the command `seam-rpc gen-client <input-files> <output-folder>` or [define a config file](#config-file) and then run the command `seam-rpc gen-client`.
 
 - `input-files` - Specify what files to generate the client files from. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
