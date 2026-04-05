@@ -18,7 +18,10 @@ export interface SeamContext {
 export interface SeamErrorContext {
     routerPath: string;
     procedureName: string;
-    input: Record<string, unknown>;
+    input?: Record<string, unknown> | null;
+    validatedInput?: Record<string, unknown> | null;
+    output?: unknown;
+    validatedOutput?: unknown;
     request: Request;
     response: Response;
     next: NextFunction;
@@ -44,7 +47,10 @@ interface ProcedureOptions<T extends ProcedureInput> {
     ctx: SeamContext;
 }
 
-type Simplify<T> = T extends object
+type Simplify<T> =
+    T extends File
+    ? File
+    : T extends object
     ? { [K in keyof T]: Simplify<T[K]> }
     : T;
 
@@ -102,14 +108,11 @@ function createProcedureBuilder(definition: SeamProcedure<ProcedureInput, Proced
     };
 }
 
-export class SeamRouter extends EventEmitter<SeamEvents> {
+export class SeamRouter {
     private router: Router;
-    private path: string;
     private procedures: ProcedureList = {};
 
-    constructor(path: string, private app: Express, private jsonParser: (req: IncomingMessage, res: ServerResponse, next: NextFunction) => void, private fileHandler: RequestHandler) {
-        super();
-        this.path = path;
+    constructor(private seamSpace: SeamSpace, private path: string) {
         this.router = Router();
 
         this.router.post("/:procName", async (req: Request, res: Response, next: NextFunction) => {
@@ -117,72 +120,56 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
             if (!procedure || !procedure.handler)
                 return res.sendStatus(404);
 
-            const contentType = req.headers["content-type"] || "";
+            let input: Record<string, any> | undefined;
+            let validatedInput: Record<string, unknown> | undefined | null = undefined;
+            let output: unknown;
+            let validatedOutput: unknown;
 
-            const runMiddleware = (middleware: RequestHandler) =>
-                new Promise<void>((resolve, reject) =>
-                    middleware(req, res, err => (err ? reject(err) : resolve()))
-                );
-
-            if (contentType.startsWith("application/json")) {
-                await runMiddleware(this.jsonParser);
-            } else if (contentType.startsWith("multipart/form-data")) {
-                await runMiddleware(this.fileHandler);
-            } else {
-                return res.status(415).send("Unsupported content type");
+            // Middleware
+            try {
+                input = await this.runMiddleware(req, res);
+            } catch (err) {
+                return res.status(415).send(String(err));
             }
-
-            let input: Record<string, any>;
-
-            if (contentType.startsWith("application/json")) {
-                input = req.body;
-            } else {
-                // multipart/form-data (already checked above)
-                input = JSON.parse(req.body.json);
-                const paths = JSON.parse(req.body.paths);
-                const files = (req.files ?? []).map((file: any, index: number) => ({
-                    path: paths[index],
-                    file: new File([file.buffer], file.originalname, { type: file.mimetype }),
-                }));
-
-                injectFiles(input, files);
-            }
-
-            let validatedInput: Record<string, unknown> | null;
 
             // Validate input
             try {
-                validatedInput = this.validateData(input, procedure.input);
+                validatedInput = this.validateInput(input, procedure.input);
             } catch (err) {
-                this.emit("inputValidationError", err, {
+                seamSpace.emit("inputValidationError", err, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
+                    validatedInput,
+                    output,
+                    validatedOutput,
                     request: req,
                     response: res,
-                    next: next,
+                    next,
                 });
                 res.sendStatus(400);
                 return;
             }
 
-            let output;
+            // Call procedure
             const ctx: SeamContext = {
                 request: req,
                 response: res,
                 next
             };
-            // Call procedure
             try {
                 output = await procedure.handler({ input: validatedInput!, ctx });
             } catch (error) {
-                this.emit("apiError", error, {
+                seamSpace.emit("apiError", error, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
+                    validatedInput,
+                    output,
+                    validatedOutput,
                     request: req,
                     response: res,
-                    next: next,
+                    next,
                 });
                 res.status(400).send({ error: String(error) });
                 return;
@@ -190,28 +177,33 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
 
             // Validate output
             try {
-                validatedInput = this.validateData(output, procedure.output);
+                validatedOutput = this.validateOutput(output, procedure.output);
             } catch (err) {
-                this.emit("outputValidationError", err, {
+                seamSpace.emit("outputValidationError", err, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
+                    validatedInput,
+                    output,
+                    validatedOutput,
                     request: req,
                     response: res,
-                    next: next,
+                    next,
                 });
-                res.sendStatus(400);
+                res.sendStatus(500);
                 return;
             }
 
             try {
-                const { json, files, paths } = extractFiles({ result: output });
+                const { json, files, paths } = extractFiles({ result: validatedOutput });
 
+                // Does not include file(s)
                 if (files.length === 0) {
                     res.json(json);
                     return;
                 }
 
+                // Includes file(s)
                 const form = new FormData();
                 form.append("json", JSON.stringify(json));
                 form.append("paths", JSON.stringify(paths));
@@ -228,10 +220,13 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
                 res.writeHead(200, form.getHeaders());
                 form.pipe(res);
             } catch (error) {
-                this.emit("internalError", error, {
+                seamSpace.emit("internalError", error, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
+                    validatedInput,
+                    output,
+                    validatedOutput,
                     request: req,
                     response: res,
                     next: next,
@@ -241,20 +236,59 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
             }
         });
 
-        this.app.use(path, this.router);
+        seamSpace.app.use(path, this.router);
     }
 
-    private validateData(data?: Record<string, any>, dataSchema?: ProcedureInput) {
-        if (!dataSchema) {
+    private async runMiddleware(req: Request, res: Response) {
+        const contentType = req.headers["content-type"] || "";
+
+        const runMiddleware = (middleware: RequestHandler) =>
+            new Promise<void>((resolve, reject) =>
+                middleware(req, res, err => (err ? reject(err) : resolve()))
+            );
+
+        if (contentType.startsWith("application/json")) {
+            await runMiddleware(this.seamSpace.jsonParser);
+        } else if (contentType.startsWith("multipart/form-data")) {
+            await runMiddleware(this.seamSpace.fileHandler);
+        } else {
+            throw new Error("Unsupported content type.");
+        }
+
+        if (contentType.startsWith("application/json"))
+            return req.body;
+
+        // multipart/form-data (already checked before)
+        let input = JSON.parse(req.body.json);
+        const paths = JSON.parse(req.body.paths);
+        const files = (req.files ?? []).map((file: any, index: number) => ({
+            path: paths[index],
+            file: new File([file.buffer], file.originalname, { type: file.mimetype }),
+        }));
+
+        injectFiles(input, files);
+
+        return input;
+    }
+
+    private validateInput(input?: Record<string, any>, inputSchema?: ProcedureInput) {
+        return this.validateData(input, z.object(inputSchema));
+    }
+
+    private validateOutput(output?: unknown, procOutput?: ProcedureOutput) {
+        return this.validateData(output, procOutput);
+    }
+
+    private validateData<T extends z.ZodType>(data?: unknown, schema?: T) {
+        if (!schema) {
             if (data)
-                throw new Error("No data expected.");
+                throw new Error("Received data, but no data expected.");
             return null;
         }
 
         if (!data)
-            throw new Error("Data expected.");
+            throw new Error("No data was received, but data was expected.");
 
-        const schema = z.object(dataSchema);
         return schema.parse(data);
     }
 
@@ -266,13 +300,25 @@ export class SeamRouter extends EventEmitter<SeamEvents> {
 }
 
 export class SeamSpace extends EventEmitter<SeamEvents> {
-    private jsonParser = express.json();
+    private _jsonParser = express.json();
 
-    constructor(private app: Express, private fileHandler: RequestHandler) {
+    constructor(private _app: Express, private _fileHandler: RequestHandler) {
         super();
     }
 
     public createRouter(path: string): SeamRouter {
-        return new SeamRouter(path, this.app, this.jsonParser, this.fileHandler);
+        return new SeamRouter(this, path);
+    }
+
+    public get app() {
+        return this._app;
+    }
+
+    public get jsonParser() {
+        return this._jsonParser;
+    }
+
+    public get fileHandler() {
+        return this._fileHandler;
     }
 }

@@ -2,6 +2,15 @@
 
 import { callApi } from "@seam-rpc/client";
 
-export function createPost(data: { authorId: string, title: string, content: string }): Promise<string> { return callApi("posts", "createPost", data); }
+export function createPost(input: { authorId: string, title: string, content: string }): Promise<string> { return callApi("posts", "createPost", input); }
 
-export function getPosts(data: {  }): Promise<void> { return callApi("posts", "getPosts", data); }
+export function getPosts(): Promise<{
+    id: string;
+    author: {
+        id: string;
+        name: string;
+        age: number;
+    };
+    title: string;
+    content: string;
+}[]> { return callApi("posts", "getPosts"); }

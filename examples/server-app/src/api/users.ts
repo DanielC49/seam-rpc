@@ -8,14 +8,19 @@ export interface User {
     age: number;
 }
 
-export const outputUser = z.object<User>();
+export const outputUser = z.object({
+    id: z.string(),
+    name: z.string(),
+    age: z.int(),
+});
 
 export const users: User[] = [];
 
 /**
- * Creates a new user and returns its ID.
+ * Creates a new user and returns it.
  * @param name The name of the user.
- * @returns ID of the newly created user.
+ * @param age The age of the user.
+ * @returns The newly created user.
  */
 const createUser = seamProcedure()
     .input({
@@ -74,8 +79,8 @@ const uploadFile = seamProcedure()
         file: z.file(),
     })
     .output(z.file())
-    .handler(({ input }) => {
-        // console.log("Uploaded text file from client:", Buffer.from(file.data).toString())
+    .handler(async ({ input }) => {
+        console.log("Uploaded text file from client:", await input.file.text())
         const buffer = readFileSync("./data/another-file.txt");
         return new File([buffer], "another-file.txt");
     });

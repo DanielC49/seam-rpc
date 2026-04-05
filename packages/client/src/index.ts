@@ -7,7 +7,7 @@ export interface SeamRequestMiddlewareContext {
     request: RequestInit;
     routerName: string;
     funcName: string;
-    input: Record<string, any>;
+    input?: Record<string, any>;
 }
 
 export type SeamResponseMiddlewareContext = SeamRequestMiddlewareContext & {
@@ -50,7 +50,7 @@ export function createClient(baseUrl: string, options?: SeamClientOptions): Seam
     return new SeamClient(baseUrl, options);
 }
 
-export async function callApi(routerName: string, funcName: string, input: Record<string, any>): Promise<any> {
+export async function callApi(routerName: string, funcName: string, input?: Record<string, any>): Promise<any> {
     if (!SeamClient._instance)
         throw new Error("Seam Client not instantiated.");
 
@@ -129,7 +129,7 @@ export async function callApi(routerName: string, funcName: string, input: Recor
     }
 }
 
-function buildRequest(input: Record<string, any>): RequestInit {
+function buildRequest(input: Record<string, any> = {}): RequestInit {
     let req: RequestInit;
 
     const { json, files, paths } = extractFiles(input);

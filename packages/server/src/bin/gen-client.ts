@@ -1,11 +1,11 @@
 import fs from "fs";
-import path, { basename } from "path";
+import path from "path";
 import fg from "fast-glob";
+import ts from "typescript";
 import * as z from "zod";
 import { zodToTs, createAuxiliaryTypeStore, printNode } from "zod-to-ts";
 import { ProcedureBuilder } from "../index.js";
 import { existsSync, writeFileSync } from "fs";
-
 import { SeamConfig } from "./index.js";
 
 export async function genClient() {
@@ -43,19 +43,95 @@ export async function genClient() {
     const outputFiles: string[] = [];
 
     for (const inputFile of inputFiles) {
-        const outputFile = await generateClientFile(inputFile, outputPath);
-        outputFiles.push(removeRootPath(outputFile, rootPath));
+        console.log(getProcedureInfo(inputFile));
+        // const outputFile = await generateClientFile(inputFile, outputPath);
+        // outputFiles.push(removeRootPath(outputFile, rootPath));
     }
 
-    console.log(
-        "\x1b[32m%s\x1b[0m\n\x1b[36m%s\x1b[0m",
-        `✅ Successfully generated client files at ${removeRootPath(outputPath, rootPath)}`,
-        `${outputFiles.join("\n")}`
-    );
+    // console.log(
+    //     "\x1b[32m%s\x1b[0m\n\x1b[36m%s\x1b[0m",
+    //     `✅ Successfully generated client files at ${removeRootPath(outputPath, rootPath)}`,
+    //     `${outputFiles.join("\n")}`
+    // );
+    
     // } catch (err: any) {
     //     console.error("❌ Failed to generate client file:", err.message);
     //     process.exit(1);
     // }
+}
+
+interface ProcedureInfo {
+    name: string;
+    inputType: string;
+    outputType: string;
+    comments: string;
+}
+
+export function getProcedureInfo(filePath: string): ProcedureInfo[] {
+    const fullPath = path.resolve(filePath);
+    const sourceText = fs.readFileSync(fullPath, "utf8");
+
+    const sourceFile = ts.createSourceFile(
+        fullPath,
+        sourceText,
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS
+    );
+
+    const procedures: ProcedureInfo[] = [];
+
+    function visit(node: ts.Node) {
+        // Look for const assignments
+        if (ts.isVariableStatement(node)) {
+            node.declarationList.declarations.forEach((decl) => {
+                if (ts.isIdentifier(decl.name) && decl.initializer) {
+                    let varName = decl.name.text;
+                    let inputType = "";
+                    let outputType = "";
+                    let comments = "";
+
+                    const jsDocs = ts.getJSDocCommentsAndTags(node); // node = VariableStatement
+
+                    // Get JSDoc comments
+                    if (jsDocs.length > 0) {
+                        comments = jsDocs.map(doc => doc.getText()).join("\n");
+                    }
+
+                    // Check for chain calls: .input(...).output(...)
+                    if (ts.isCallExpression(decl.initializer) || ts.isPropertyAccessExpression(decl.initializer)) {
+                        function extractChain(expr: ts.Expression) {
+                            if (ts.isCallExpression(expr)) {
+                                if (ts.isPropertyAccessExpression(expr.expression)) {
+                                    const propName = expr.expression.name.text;
+                                    if (propName === "input" && expr.arguments.length > 0) {
+                                        inputType = expr.arguments[0].getText();
+                                    } else if (propName === "output" && expr.arguments.length > 0) {
+                                        outputType = expr.arguments[0].getText();
+                                    }
+                                    extractChain(expr.expression.expression);
+                                }
+                            } else if (ts.isPropertyAccessExpression(expr)) {
+                                extractChain(expr.expression);
+                            }
+                        }
+
+                        extractChain(decl.initializer);
+                    }
+
+                    if (inputType || outputType || comments) {
+                        procedures.push({ name: varName, inputType, outputType, comments });
+                    }
+                }
+            });
+        }
+
+        ts.forEachChild(node, visit);
+    }
+
+    visit(sourceFile);
+
+    return procedures;
 }
 
 function removeRootPath(path: string, rootPath: string) {
@@ -80,6 +156,17 @@ import { callApi } from \"@seam-rpc/client\";
 
 `;
 
+    // Parse the source file using TypeScript API
+    const program = ts.createProgram([sourceFile], {});
+    const tsFile = program.getSourceFile(sourceFile)!;
+
+    // Helper to get JSDoc comment for a variable
+    function getJsDocComment(node: ts.Node) {
+        const jsDocs = (node as any).jsDoc as ts.JSDoc[] | undefined;
+        if (!jsDocs || jsDocs.length === 0) return "";
+        return jsDocs.map(doc => doc.comment).filter(Boolean).join("\n");
+    }
+
     const functions: string[] = [];
 
     for (const [procName, proc] of Object.entries(procedures)) {
@@ -94,9 +181,28 @@ import { callApi } from \"@seam-rpc/client\";
         // Output
         const returnType = proc._def.output ? convert(proc._def.output) : "void";
 
-        // TODO: Generate comments for data validation
+        // Input
+        const hasInput = input.length != 0;
+        const params = hasInput ? `input: { ${input.join(", ")} }` : "";
 
-        const func = `export function ${procName}(data: { ${input.join(", ")} }): Promise<${returnType}> { return callApi("${routerName}", "${procName}", data); }`;
+        // Function body
+        const body = `return callApi("${routerName}", "${procName}"${hasInput ? ", input" : ""});`;
+
+        // Comments
+        let comments = "";
+        ts.forEachChild(tsFile, node => {
+            if (ts.isVariableStatement(node)) {
+                node.declarationList.declarations.forEach(decl => {
+                    console.log(decl.name.getText(), procName)
+                    if (decl.name.getText() === procName) {
+                        const doc = getJsDocComment(decl);
+                        if (doc) comments = `/** ${doc} */\n`;
+                    }
+                });
+            }
+        });
+
+        const func = `${comments}export function ${procName}(${params}): Promise<${returnType}> { ${body} }`;
 
         functions.push(func);
     }

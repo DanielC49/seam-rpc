@@ -2,22 +2,22 @@
 
 import { callApi } from "@seam-rpc/client";
 
-export function createUser(data: { name?: string | undefined, age: number }): Promise<{
+export function createUser(input: { name: string, age: number }): Promise<{
     id: string;
     name: string;
     age: number;
-}> { return callApi("users", "createUser", data); }
+}> { return callApi("users", "createUser", input); }
 
-export function getUser(data: { id: string }): Promise<{
+export function getUser(input: { id: string }): Promise<{
     id: string;
     name: string;
     age: number;
-} | undefined> { return callApi("users", "getUser", data); }
+} | undefined> { return callApi("users", "getUser", input); }
 
-export function getUsers(data: {  }): Promise<{
+export function getUsers(): Promise<{
     id: string;
     name: string;
     age: number;
-}[]> { return callApi("users", "getUsers", data); }
+}[]> { return callApi("users", "getUsers"); }
 
-export function uploadFile(data: { file: File }): Promise<File> { return callApi("users", "uploadFile", data); }
+export function uploadFile(input: { file: File }): Promise<File> { return callApi("users", "uploadFile", input); }

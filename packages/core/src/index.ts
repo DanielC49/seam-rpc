@@ -31,13 +31,12 @@ export function extractFiles(input: unknown) {
 
 export function injectFiles(json: any, files: { path: (string | number)[], file: File }[]) {
     for (const file of files) {
-        let value = json;
         for (let i = 0; i < file.path.length; i++) {
             const key = file.path[i];
             if (i < file.path.length - 1)
-                value = value[key];
+                json = json[key];
             else
-                value[key] = file.file;
+                json[key] = file.file;
         }
     }
 }

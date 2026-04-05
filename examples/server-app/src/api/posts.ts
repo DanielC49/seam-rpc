@@ -1,5 +1,5 @@
 import { seamProcedure } from "@seam-rpc/server";
-import { getUser, users } from "./users.js";
+import { getUser, outputUser, users } from "./users.js";
 import type { User } from "./users.js";
 import z from "zod";
 
@@ -9,6 +9,13 @@ export interface Post {
     title: string;
     content: string;
 }
+
+const outputPost = z.object({
+    id: z.string(),
+    author: outputUser,
+    title: z.string(),
+    content: z.string(),
+});
 
 const posts: Post[] = [];
 
@@ -47,7 +54,8 @@ const createPost = seamProcedure()
  * @returns Array of posts.
  */
 const getPosts = seamProcedure()
-    .handler(({ input }) => {
+    .output(z.array(outputPost))
+    .handler(() => {
         return posts;
     });
 

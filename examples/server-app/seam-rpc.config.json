@@ -1,4 +1,4 @@
 {
-    "inputFiles": "./dist/api/*.js",
+    "inputFiles": "./src/api/*.ts",
     "outputFolder": "../client-app/src/api"
 }
