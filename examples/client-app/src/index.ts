@@ -1,8 +1,8 @@
-import { createClient } from "@seam-rpc/client";
+import { createSeamClient } from "@seam-rpc/client";
 import * as user from "./api/users.js";
 import * as post from "./api/posts.js";
 
-const client = createClient("http://localhost:3000");
+const client = createSeamClient("http://localhost:3000");
 
 client.preRequest(ctx => {
     // Add a custom header before sending the request
