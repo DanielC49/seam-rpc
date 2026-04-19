@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 
-import { genClient } from "./gen-client.js";
-import { genConfig } from "./gen-config.js";
+import { generateClient } from "./generate.js";
+import { initConfig } from "./init.js";
 
 main();
 
@@ -9,14 +9,14 @@ function main() {
     const args = process.argv;
 
     switch (args[2]) {
-        case "gen-client":
-            genClient();
+        case "generate":
+            generateClient();
             break;
-        case "gen-config":
-            genConfig();
+        case "init":
+            initConfig();
             break;
         default:
-            console.log("Commands:\n- seam-rpc gen-client <input-files> <output-folder>\n- seam-rpc gen-config [input-files] [output-folder]");
+            console.log("Commands:\n- \x1b[36msrpc generate\x1b[0m - Generate client files as defined in the config.\n- \x1b[36msrpc init\x1b[0m - Create config file.");
     }
 }
 

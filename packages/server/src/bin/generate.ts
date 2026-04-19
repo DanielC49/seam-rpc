@@ -8,10 +8,8 @@ import { ProcedureBuilder } from "../index.js";
 import { existsSync, writeFileSync } from "fs";
 import { SeamConfig } from "./index.js";
 
-export async function genClient() {
-    const args = process.argv;
-    const config = loadConfig(args);
-
+export async function generateClient() {
+    const config = loadConfig();
     if (!config) return;
 
     const sourceFiles = await fg(config.source);
@@ -47,38 +45,16 @@ export async function genClient() {
 
 
 
-function loadConfig(args: string[]): SeamConfig | null {
-    if (args.length == 3) {
-        // Use config
-
-        // Check if config exists
-        if (!fs.existsSync("./seam-rpc.config.json")) {
-            console.error("\x1b[31mCommand arguments omitted and no config file found.\x1b[0m\n"
-                + "Either define a config file with \x1b[36mseam-rpc gen-config\x1b[0m or generate the client files using \x1b[36mseam-rpc gen-client <input-files> <output-folder> [global-types-file]\x1b[0m.");
-            return null;
-        }
-
-        // Load config from config file
-        return JSON.parse(fs.readFileSync("./seam-rpc.config.json", "utf-8"));
-    } else if (args.length == 5 || args.length == 6) {
-        // Use command args
-
-        // Load config from command args
-        return {
-            source: args[3],
-            compiledFolder: args[4],
-            outputFolder: args[5]
-        };
-    } else {
-        // Invalid command usage
-        console.error("Usage: seam-rpc gen-client <input-files> <output-folder>");
+function loadConfig(): SeamConfig | null {
+    // Check if config exists
+    if (!fs.existsSync("./seam-rpc.config.json")) {
+        console.error("\x1b[31mNo config file found.\x1b[0m\n Create a config file with \x1b[36msrpc init\x1b[0m.");
         return null;
     }
-}
 
-/* ---------------------------------- */
-/* Types */
-/* ---------------------------------- */
+    // Load config from config file
+    return JSON.parse(fs.readFileSync("./seam-rpc.config.json", "utf-8"));
+}
 
 interface GenerateOptions {
     tsPath: string;
