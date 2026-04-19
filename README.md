@@ -166,7 +166,7 @@ In order to generate the client files, you must create a config file. You can cr
 }
 ```
 - `source` - Source ".ts" files to generate the client files from. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
-- `compiledFolder` - The folder where you store your compiled/built ".js" files. SeamRPC requires these to get runtime types. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
+- `compiledFolder` - The folder where you store your compiled/built ".js" files. SeamRPC requires these to get runtime types.
 - `outputFolder` - The folder where to store the generated client api files.
 
 ## Uploading and downloading files
