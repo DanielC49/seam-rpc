@@ -4,11 +4,12 @@ import { SeamConfig } from "./index.js";
 
 export async function genConfig() {
     const args = process.argv;
-    let inputFiles = "./src/api/*";
+    let source = "./src/api/*";
+    let compiledFolder = "./dist/api";
     let outputFolder = "../client/src/api";
 
     if (args.length == 5) {
-        inputFiles = args[3];
+        source = args[3];
         outputFolder = args[4];
     } else if (args.length > 3) {
         return console.error("Usage: seam-rpc gen-config [input-files] [output-folder]");
@@ -34,7 +35,8 @@ export async function genConfig() {
 
     function generateConfig() {
         const config: SeamConfig = {
-            inputFiles,
+            source,
+            compiledFolder,
             outputFolder
         };
 

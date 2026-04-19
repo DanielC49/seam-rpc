@@ -10,232 +10,209 @@ import { SeamConfig } from "./index.js";
 
 export async function genClient() {
     const args = process.argv;
-    let config: SeamConfig;
+    const config = loadConfig(args);
 
+    if (!config) return;
+
+    const sourceFiles = await fg(config.source);
+    const compiledFolder = path.resolve(config.compiledFolder);
+    const outputPath = path.resolve(config.outputFolder);
+    const rootPath = path.resolve(".");
+
+    function removeRootPath(path: string) {
+        return "." + path.slice(rootPath.length);
+    }
+
+    try {
+        const outputFiles: string[] = [];
+
+        for (let i = 0; i < sourceFiles.length; i++) {
+            const sourceFile = sourceFiles[i];
+            const path = await generateClientFile({ tsPath: sourceFile, jsPath: compiledFolder, outputPath });
+            const symb = i < sourceFiles.length - 1 ? " ├╴" : " └╴";
+            outputFiles.push(symb + removeRootPath(path));
+        }
+
+        console.log(
+            "\x1b[32m\x1b[1m%s\x1b[0m\n\x1b[94m%s\x1b[0m",
+            `✅ Successfully generated client files at ${config.outputFolder}`,
+            `${outputFiles.join("\n")}`
+        );
+
+    } catch (err: any) {
+        console.error("❌ Failed to generate client file:", err.message);
+        process.exit(1);
+    }
+}
+
+
+
+function loadConfig(args: string[]): SeamConfig | null {
     if (args.length == 3) {
         // Use config
 
         // Check if config exists
-        if (!fs.existsSync("./seam-rpc.config.json"))
-            return console.error("\x1b[31mCommand arguments omitted and no config file found.\x1b[0m\n"
+        if (!fs.existsSync("./seam-rpc.config.json")) {
+            console.error("\x1b[31mCommand arguments omitted and no config file found.\x1b[0m\n"
                 + "Either define a config file with \x1b[36mseam-rpc gen-config\x1b[0m or generate the client files using \x1b[36mseam-rpc gen-client <input-files> <output-folder> [global-types-file]\x1b[0m.");
+            return null;
+        }
 
         // Load config from config file
-        config = JSON.parse(fs.readFileSync("./seam-rpc.config.json", "utf-8"));
+        return JSON.parse(fs.readFileSync("./seam-rpc.config.json", "utf-8"));
     } else if (args.length == 5 || args.length == 6) {
         // Use command args
 
         // Load config from command args
-        config = {
-            inputFiles: args[3],
-            outputFolder: args[4]
+        return {
+            source: args[3],
+            compiledFolder: args[4],
+            outputFolder: args[5]
         };
     } else {
         // Invalid command usage
-        return console.error("Usage: seam-rpc gen-client <input-files> <output-folder>");
+        console.error("Usage: seam-rpc gen-client <input-files> <output-folder>");
+        return null;
     }
-
-    const inputFiles = await fg(config.inputFiles);
-    const outputPath = path.resolve(config.outputFolder);
-    const rootPath = path.resolve(".");
-
-    // try {
-    const outputFiles: string[] = [];
-
-    for (const inputFile of inputFiles) {
-        console.log(getProcedureInfo(inputFile));
-        // const outputFile = await generateClientFile(inputFile, outputPath);
-        // outputFiles.push(removeRootPath(outputFile, rootPath));
-    }
-
-    // console.log(
-    //     "\x1b[32m%s\x1b[0m\n\x1b[36m%s\x1b[0m",
-    //     `✅ Successfully generated client files at ${removeRootPath(outputPath, rootPath)}`,
-    //     `${outputFiles.join("\n")}`
-    // );
-    
-    // } catch (err: any) {
-    //     console.error("❌ Failed to generate client file:", err.message);
-    //     process.exit(1);
-    // }
 }
 
-interface ProcedureInfo {
-    name: string;
-    inputType: string;
-    outputType: string;
-    comments: string;
+/* ---------------------------------- */
+/* Types */
+/* ---------------------------------- */
+
+interface GenerateOptions {
+    tsPath: string;
+    jsPath: string;
+    outputPath: string;
 }
 
-export function getProcedureInfo(filePath: string): ProcedureInfo[] {
-    const fullPath = path.resolve(filePath);
-    const sourceText = fs.readFileSync(fullPath, "utf8");
+// Extracts comments from TS file.
+function getProcedureComments(filePath: string) {
+    const sourceText = fs.readFileSync(filePath, "utf8");
 
     const sourceFile = ts.createSourceFile(
-        fullPath,
+        filePath,
         sourceText,
         ts.ScriptTarget.Latest,
-        true,
-        ts.ScriptKind.TS
+        true
     );
 
-    const procedures: ProcedureInfo[] = [];
+    const comments: Record<string, string> = {};
 
     function visit(node: ts.Node) {
-        // Look for const assignments
         if (ts.isVariableStatement(node)) {
-            node.declarationList.declarations.forEach((decl) => {
-                if (ts.isIdentifier(decl.name) && decl.initializer) {
-                    let varName = decl.name.text;
-                    let inputType = "";
-                    let outputType = "";
-                    let comments = "";
+            const comment = getFullComment(node, sourceText);
 
-                    const jsDocs = ts.getJSDocCommentsAndTags(node); // node = VariableStatement
-
-                    // Get JSDoc comments
-                    if (jsDocs.length > 0) {
-                        comments = jsDocs.map(doc => doc.getText()).join("\n");
-                    }
-
-                    // Check for chain calls: .input(...).output(...)
-                    if (ts.isCallExpression(decl.initializer) || ts.isPropertyAccessExpression(decl.initializer)) {
-                        function extractChain(expr: ts.Expression) {
-                            if (ts.isCallExpression(expr)) {
-                                if (ts.isPropertyAccessExpression(expr.expression)) {
-                                    const propName = expr.expression.name.text;
-                                    if (propName === "input" && expr.arguments.length > 0) {
-                                        inputType = expr.arguments[0].getText();
-                                    } else if (propName === "output" && expr.arguments.length > 0) {
-                                        outputType = expr.arguments[0].getText();
-                                    }
-                                    extractChain(expr.expression.expression);
-                                }
-                            } else if (ts.isPropertyAccessExpression(expr)) {
-                                extractChain(expr.expression);
-                            }
-                        }
-
-                        extractChain(decl.initializer);
-                    }
-
-                    if (inputType || outputType || comments) {
-                        procedures.push({ name: varName, inputType, outputType, comments });
-                    }
-                }
-            });
+            for (const decl of node.declarationList.declarations) {
+                if (ts.isIdentifier(decl.name))
+                    comments[decl.name.text] = comment;
+            }
         }
 
         ts.forEachChild(node, visit);
     }
 
     visit(sourceFile);
-
-    return procedures;
+    return comments;
 }
 
-function removeRootPath(path: string, rootPath: string) {
-    return "." + path.slice(rootPath.length);
-}
+function getFullComment(node: ts.Node, sourceText: string): string {
+    const ranges = ts.getLeadingCommentRanges(sourceText, node.pos);
 
-async function generateClientFile(sourcePath: string, outputPath: string) {
-    const sourceFile = path.resolve(process.cwd(), sourcePath);
+    if (!ranges) return "";
 
-    if (!existsSync(sourceFile)) {
-        console.error(`File ${sourceFile} not found`);
-        process.exit(1);
+    for (const range of ranges) {
+        const comment = sourceText.slice(range.pos, range.end);
+
+        // Only keep JSDoc-style comments
+        if (comment.startsWith("/**")) {
+            return comment;
+        }
     }
 
-    const module = await import("file://" + sourceFile);
-    const procedures: Record<string, ProcedureBuilder<any, any>> = module.default;
-    const routerName = path.basename(sourceFile, path.extname(sourceFile));
+    return "";
+}
 
-    let fileContent = `/* Auto-generated by SeamRPC - DO NOT EDIT */
+function convert(schema: z.ZodType): string {
+    const store = createAuxiliaryTypeStore();
+    const { node } = zodToTs(schema, { auxiliaryTypeStore: store });
+    return printNode(node);
+}
 
-import { callApi } from \"@seam-rpc/client\";
+export async function generateClientFile({
+    tsPath,
+    jsPath,
+    outputPath,
+}: GenerateOptions) {
+    const tsFile = path.resolve(process.cwd(), tsPath);
+    const tsFileName = path.basename(tsFile).slice(0, -path.extname(tsFile).length);
+    const jsFile = path.resolve(process.cwd(), path.join(jsPath, tsFileName + ".js"));
+
+    if (!existsSync(tsFile)) {
+        throw new Error(`TS file not found: ${tsFile}`);
+    }
+
+    if (!existsSync(jsFile)) {
+        throw new Error(`JS file not found: ${jsFile}`);
+    }
+
+    const mod = await import("file://" + jsFile);
+    const procedures: Record<string, ProcedureBuilder<any, any>> = mod.default;
+    const routerName = path.basename(jsFile, path.extname(jsFile));
+    const comments = getProcedureComments(tsFile);
+
+    let output = `/**
+ * +===================================+
+ * |  File auto-generated by SeamRPC.  |
+ * |        --- DO NOT EDIT ---        |
+ * +===================================+
+ */
+
+import { callApi } from "@seam-rpc/client";
 
 `;
 
-    // Parse the source file using TypeScript API
-    const program = ts.createProgram([sourceFile], {});
-    const tsFile = program.getSourceFile(sourceFile)!;
-
-    // Helper to get JSDoc comment for a variable
-    function getJsDocComment(node: ts.Node) {
-        const jsDocs = (node as any).jsDoc as ts.JSDoc[] | undefined;
-        if (!jsDocs || jsDocs.length === 0) return "";
-        return jsDocs.map(doc => doc.comment).filter(Boolean).join("\n");
-    }
-
     const functions: string[] = [];
 
-    for (const [procName, proc] of Object.entries(procedures)) {
+    for (const [name, proc] of Object.entries(procedures)) {
         // Input
-        const input: string[] = [];
+        let inputType = "void";
+        let hasInput = false;
+
         if (proc._def.input) {
-            for (const [paramName, param] of Object.entries(proc._def.input)) {
-                input.push(`${paramName}${param instanceof z.ZodOptional ? "?" : ""}: ${convert(param as z.ZodType)}`);
+            const fields: string[] = [];
+
+            for (const [key, schema] of Object.entries(proc._def.input)) {
+                const isOptional =
+                    (schema as any).isOptional?.() ?? false;
+
+                const tsType = convert(schema as z.ZodType);
+
+                fields.push(`${key}${isOptional ? "?" : ""}: ${tsType}`);
+            }
+
+            if (fields.length > 0) {
+                inputType = `{ ${fields.join("; ")} }`;
+                hasInput = true;
             }
         }
 
-        // Output
         const returnType = proc._def.output ? convert(proc._def.output) : "void";
+        const params = hasInput ? `input: ${inputType}` : "";
+        const args = [`"${routerName}"`, `"${name}"`];
+        if (hasInput) args.push("input");
+        const call = `callApi(${args.join(", ")})`;
+        const comment = comments[name] ? comments[name] + "\n" : "";
 
-        // Input
-        const hasInput = input.length != 0;
-        const params = hasInput ? `input: { ${input.join(", ")} }` : "";
-
-        // Function body
-        const body = `return callApi("${routerName}", "${procName}"${hasInput ? ", input" : ""});`;
-
-        // Comments
-        let comments = "";
-        ts.forEachChild(tsFile, node => {
-            if (ts.isVariableStatement(node)) {
-                node.declarationList.declarations.forEach(decl => {
-                    console.log(decl.name.getText(), procName)
-                    if (decl.name.getText() === procName) {
-                        const doc = getJsDocComment(decl);
-                        if (doc) comments = `/** ${doc} */\n`;
-                    }
-                });
-            }
-        });
-
-        const func = `${comments}export function ${procName}(${params}): Promise<${returnType}> { ${body} }`;
+        const func = `${comment}export function ${name}(${params}): Promise<${returnType}> {
+    return ${call};
+}`;
 
         functions.push(func);
     }
 
-    fileContent += functions.join("\n\n");
-
-    writeFileSync(`${outputPath}/${routerName}.ts`, fileContent, "utf-8");
-
-    return sourceFile;
+    output += functions.join("\n\n");
+    const outFile = path.join(outputPath, `${routerName}.ts`);
+    writeFileSync(outFile, output, "utf-8");
+    return outFile;
 }
-
-function convert(schema: z.ZodType) {
-    const auxiliaryTypeStore = createAuxiliaryTypeStore();
-    const { node } = zodToTs(schema, { auxiliaryTypeStore });
-    return printNode(node);
-}
-
-// function zodToTs(schema: z.ZodType): { value: string, definition?: string } {
-//     if (schema instanceof z.ZodString) {
-//         return { value: "string" };
-//     }
-
-//     if (schema instanceof z.ZodNumber) {
-//         return { value: "number" };
-//     }
-
-//     if (schema instanceof z.ZodArray) {
-//         return { value: zodToTs(schema.def.type) + "[]" };
-//     }
-
-//     if (schema instanceof z.ZodOptional) {
-//         return {value: };
-//     }
-
-//     return { value: "any" };
-// }

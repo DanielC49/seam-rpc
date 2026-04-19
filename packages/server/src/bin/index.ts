@@ -21,6 +21,7 @@ function main() {
 }
 
 export interface SeamConfig {
-    inputFiles: string;
+    source: string;
+    compiledFolder: string;
     outputFolder: string;
 }
