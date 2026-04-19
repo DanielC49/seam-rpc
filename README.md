@@ -113,10 +113,7 @@ app.listen(3000, () => {
 ```
 
 ## Client
-The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send an HTTP requests to the server. SeamRPC can automatically generate the client schema files. To do this, you can either run the command `seam-rpc gen-client <input-files> <output-folder>` or [define a config file](#config-file) and then run the command `seam-rpc gen-client`.
-
-- `input-files` - Specify what files to generate the client files from. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
-- `output-folder` - Specify the folder where to store the generated client api files.
+The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send HTTP requests to the server. SeamRPC can automatically generate the client schema files. To do this, you run the command `srpc generate`.
 
 **Example:**
 `seam-rpc gen-client ./src/api/* ../server-app/src/api`
@@ -160,14 +157,17 @@ createClient("http://localhost:3000");
 ```
 
 ### Config file
-If you don't want to specify the input files and output folder every time you want to generate the client files, you can create a config file where you define these paths. You can create a `seam-rpc.config.json` file at the root of your project and use the following data:
+In order to generate the client files, you must create a config file. You can create one with `srpc init`. This will create a `seam-rpc.config.json` file at the root of your project. Edit the file according to your project and needs.
 ```json
 {
-    "inputFiles": "./src/api/*",
+    "source": "./src/api/*",
+    "compiledFolder": "./dist/api",
     "outputFolder": "../client/src/api"
 }
 ```
-or you can automatically generate a file using `seam-rpc gen-config [input-files] [output-folder]`. If you don't specify the input files and output folder, it will use the default paths (see JSON above).
+- `source` - Source ".ts" files to generate the client files from. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
+- `compiledFolder` - The folder where you store your compiled/built ".js" files. SeamRPC requires these to get runtime types. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
+- `outputFolder` - The folder where to store the generated client api files.
 
 ## Uploading and downloading files
 Both server and client can send files seamlessly. Just use the SeamFile class for this. You can have a parameter as a file or an array/object containing a file. You can have deeply nested files inside objects.
