@@ -46,7 +46,7 @@ export class SeamClient {
     }
 }
 
-export function createClient(baseUrl: string, options?: SeamClientOptions): SeamClient {
+export function createSeamClient(baseUrl: string, options?: SeamClientOptions): SeamClient {
     return new SeamClient(baseUrl, options);
 }
 
@@ -75,6 +75,7 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
     try {
         res = await fetch(url, req);
     } catch (err) {
+        // TODO: handle this better
         console.log(url, req, err);
         throw new Error("Failed to send request.\n" + err);
     }
