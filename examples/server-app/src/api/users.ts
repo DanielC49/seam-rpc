@@ -28,9 +28,16 @@ const createUser = seamProcedure()
         age: z.int().min(1).max(150),
     })
     .output(outputUser)
-    .handler(({ input, ctx }) => {
+    .errors({
+        user_name_already_exists: z.object({ name: z.string() }),
+    })
+    .handler(({ input, ctx, error }) => {
         console.log("Request path:", ctx.request.originalUrl);
         console.log(ctx.request.headers);
+
+        if (users.find(u => u.name == input.name)) {
+            throw error("user_name_already_exists", { name: input.name });
+        }
 
         const user = {
             id: Date.now().toString(),
@@ -50,7 +57,7 @@ const createUser = seamProcedure()
  */
 export const getUser = seamProcedure()
     .input({ id: z.string() })
-    .output(outputUser.or(z.undefined()))
+    .output(outputUser)
     .handler(({ input }) => {
         const user = users.find(e => e.id == input.id);
         if (user)

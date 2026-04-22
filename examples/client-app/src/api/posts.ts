@@ -5,7 +5,7 @@
  * +===================================+
  */
 
-import { callApi } from "@seam-rpc/client";
+import { callApi, Result, RpcError } from "@seam-rpc/client";
 
 /**
  * Creates a post and returns its ID.
@@ -13,7 +13,7 @@ import { callApi } from "@seam-rpc/client";
  * @param content The conent of the post.
  * @returns ID of the newly created post.
  */
-export function createPost(input: { authorId: string; title: string; content: string }): Promise<string> {
+export function createPost(input: { authorId: string; title: string; content: string }): Promise<Result<string>> {
     return callApi("posts", "createPost", input);
 }
 
@@ -21,7 +21,7 @@ export function createPost(input: { authorId: string; title: string; content: st
  * Gets the list of all posts.
  * @returns Array of posts.
  */
-export function getPosts(): Promise<{
+export function getPosts(): Promise<Result<{
     id: string;
     author: {
         id: string;
@@ -30,6 +30,6 @@ export function getPosts(): Promise<{
     };
     title: string;
     content: string;
-}[]> {
+}[]>> {
     return callApi("posts", "getPosts");
 }

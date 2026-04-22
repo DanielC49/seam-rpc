@@ -1,4 +1,7 @@
-import { extractFiles, injectFiles } from "@seam-rpc/core";
+import { extractFiles, injectFiles, ResError, RpcError, type Result } from "@seam-rpc/core";
+
+export { RpcError };
+export type { Result };
 
 export type SeamRequestMiddleware = (context: SeamRequestMiddlewareContext) => void | Promise<void>;
 export type SeamResponseMiddleware = (context: SeamResponseMiddlewareContext) => void | Promise<void>;
@@ -46,11 +49,35 @@ export class SeamClient {
     }
 }
 
+export class SeamError extends RpcError {
+    constructor(code: string) {
+        super(code, undefined);
+    }
+}
+
+type SeamClientErrorType =
+    | "REQUEST_FAILED"
+    | "TIMEOUT"
+    | "PARSE_ERROR"
+    | "INVALID_RESPONSE";
+
+export class SeamClientError extends Error {
+    constructor(
+        readonly type: SeamClientErrorType,
+        message: string,
+        readonly request: RequestInit,
+        readonly cause: unknown
+    ) {
+        super(message);
+        this.name = "SeamClientError";
+    }
+}
+
 export function createSeamClient(baseUrl: string, options?: SeamClientOptions): SeamClient {
     return new SeamClient(baseUrl, options);
 }
 
-export async function callApi(routerName: string, funcName: string, input?: Record<string, any>): Promise<any> {
+export async function callApi(routerName: string, funcName: string, input?: Record<string, any>): Promise<Result<any, any>> {
     if (!SeamClient._instance)
         throw new Error("Seam Client not instantiated.");
 
@@ -75,24 +102,33 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
     try {
         res = await fetch(url, req);
     } catch (err) {
-        // TODO: handle this better
-        console.log(url, req, err);
-        throw new Error("Failed to send request.\n" + err);
+        throw new SeamClientError("REQUEST_FAILED", "Failed to send request.", req, err);
     }
 
     if (!res.ok) {
         if (res.status == 400) {
-            const resError = await res.json();
-            throw new Error(resError.error);
+            const resError: ResError = await res.json();
+            if (resError.rpcError) {
+                return {
+                    ok: false,
+                    error: new RpcError(resError.error.code, resError.error.data),
+                }
+            } else {
+                return { ok: false, error: null };
+            }
         }
-        throw new Error(`Request failed at router ${routerName} at function ${funcName}, with status ${res.status} ${res.statusText}.`);
+        // throw new Error(`Request failed at router ${routerName} at function ${funcName}, with status ${res.status} ${res.statusText}.`);
+        return { ok: false, error: null };
     }
 
     const contentType = res.headers.get("content-type") || "";
 
     if (contentType.startsWith("application/json")) {
         const data = await res.json();
-        return data.result;
+        return {
+            ok: true,
+            data: data.result,
+        };
     } else if (contentType.startsWith("multipart/form-data")) {
         const formData = await res.formData();
         const jsonPart = JSON.parse(formData.get("json")?.toString() || "[]");
@@ -126,7 +162,12 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
             }
         }
 
-        return jsonPart.result;
+        return {
+            ok: true,
+            data: jsonPart.result,
+        };
+    } else {
+        return { ok: false, error: null };
     }
 }
 

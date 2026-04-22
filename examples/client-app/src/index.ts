@@ -17,28 +17,39 @@ client.postRequest(ctx => {
     console.log(ctx.response.headers.get("X-SomeHeader"));
 });
 
-test();
-
 async function test() {
     try {
-        const newUser = await user.createUser({ name: "John", age: 25 });
-        console.log("Created user:", newUser);
+        usersService.createUser("John", 25);
+        usersService.createUser("John", 20);
 
-        const createdUser = await user.getUser({ id: newUser.id });
-        console.log("Created user data:", createdUser);
+        // const createdUser = await user.getUser({ id: newUser.id });
+        // console.log("Created user data:", createdUser);
 
-        const users = await user.getUsers();
-        console.log("All users:", users);
+        // const users = await user.getUsers();
+        // console.log("All users:", users);
 
-        const postId = await post.createPost({ authorId: newUser.id, title: "Test", content: "Testing posts" });
-        console.log("Created post with ID:", postId);
+        // const postId = await post.createPost({ authorId: newUser.id, title: "Test", content: "Testing posts" });
+        // console.log("Created post with ID:", postId);
 
-        const posts = await post.getPosts();
-        console.log("All posts:", posts);
+        // const posts = await post.getPosts();
+        // console.log("All posts:", posts);
 
-        const file = await user.uploadFile({ file: new File(["Hello from client!"], "test.txt") });
-        console.log("Downloaded text file from server:", await file.text());
+        // const file = await user.uploadFile({ file: new File(["Hello from client!"], "test.txt") });
+        // console.log("Downloaded text file from server:", await file.text());
     } catch (err) {
         console.error(err);
     }
 }
+
+const usersService = {
+    async createUser(name: string, age: number) {
+        const res = await user.createUser({ name: "John", age: 25 });
+        if (res.ok) {
+            console.log("Created user:", res.data);
+        } else {
+            console.log("Failed to create user: " + res.error.data.name);
+        }
+    }
+};
+
+test();

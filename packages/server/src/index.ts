@@ -1,13 +1,21 @@
-import { extractFiles, injectFiles } from "@seam-rpc/core";
+import { extractFiles, injectFiles, ResError, RpcError } from "@seam-rpc/core";
 import EventEmitter from "events";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
 import FormData from "form-data";
-import { IncomingMessage, ServerResponse } from "http";
 import * as z from "zod";
 
 export interface RouterDefinition {
     [procName: string]: (...args: any[]) => Promise<any>;
 };
+
+type Simplify<T> =
+    T extends File
+    ? File
+    : T extends object
+    ? { [K in keyof T]: Simplify<T[K]> }
+    : T;
+
+// Context
 
 export interface SeamContext {
     request: Request;
@@ -34,39 +42,52 @@ export interface SeamEvents {
     outputValidationError: [error: unknown, context: SeamErrorContext];
 }
 
-type ProcedureHandler<Input extends ProcedureInput, Output extends z.ZodType> = (options: ProcedureOptions<Input>) => z.infer<Output> | Promise<z.infer<Output>>;
+// Procedures
+
+type ProcedureHandler<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> =
+    (options: ProcedureOptions<Input, Errors>) => z.infer<Output> | Promise<z.infer<Output>>;
+
+interface ProcedureOptions<Input extends ProcedureInput, Errors extends ProcedureErrors> {
+    input: Simplify<ProcedureInputData<Input>>;
+    ctx: SeamContext;
+    error: RpcErrorFactory<Errors>;
+}
+
+type RpcErrorFactory<Errors extends ProcedureErrors> = <Code extends keyof Errors>(
+    code: Code,
+    ...args: z.infer<Errors[Code]> extends undefined
+        ? []
+        : [data: z.infer<Errors[Code]>]
+) => void;
+
 type ProcedureInput = Record<string, z.ZodType>;
 type ProcedureOutput = z.ZodType;
+type ProcedureErrors = Record<string, z.ZodType>;
+
+type ProcedureList = Record<string, SeamProcedure<any, any, any>>;
+type ProcedureBuilderList = Record<string, ProcedureBuilder<any, any, any>>;
 
 type ProcedureInputData<T extends ProcedureInput> = {
     [K in keyof T]: z.infer<T[K]>;
 };
 
-interface ProcedureOptions<T extends ProcedureInput> {
-    input: Simplify<ProcedureInputData<T>>;
-    ctx: SeamContext;
-}
-
-type Simplify<T> =
-    T extends File
-    ? File
-    : T extends object
-    ? { [K in keyof T]: Simplify<T[K]> }
-    : T;
-
-interface SeamProcedure<Input extends ProcedureInput, Output extends ProcedureOutput> {
+interface SeamProcedure<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> {
     input?: Input;
     output?: Output;
-    handler?: ProcedureHandler<Input, Output>;
+    errors?: Errors;
+    handler?: ProcedureHandler<Input, Output, Errors>;
 }
 
-type ProcedureList = Record<string, SeamProcedure<any, any>>;
+export type ProcedureBuilder<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> = {
+    _def: SeamProcedure<Input, Output, Errors>;
+    input: <T extends ProcedureInput>(schema: T) => ProcedureBuilder<T, Output, Errors>;
+    output: <T extends ProcedureOutput>(schema: T) => ProcedureBuilder<Input, T, Errors>;
+    errors: <T extends ProcedureErrors>(errors: T) => ProcedureBuilder<Input, Output, T>;
+    handler: (handler: ProcedureHandler<Input, Output, Errors>) => ProcedureBuilder<Input, Output, Errors>;
+};
 
-export type ProcedureBuilder<Input extends ProcedureInput, Output extends ProcedureOutput> = {
-    _def: SeamProcedure<Input, Output>;
-    input: <T extends ProcedureInput>(schema: T) => ProcedureBuilder<T, Output>;
-    output: <T extends ProcedureOutput>(schema: T) => ProcedureBuilder<Input, T>;
-    handler: (handler: ProcedureHandler<Input, Output>) => ProcedureBuilder<Input, Output>;
+const errorHandler: RpcErrorFactory<ProcedureErrors> = (code, ...args) => {
+    return new RpcError(code, args[0]);
 };
 
 export async function createSeamSpace(app: Express, fileHandler?: RequestHandler): Promise<SeamSpace> {
@@ -86,11 +107,13 @@ export async function createSeamSpace(app: Express, fileHandler?: RequestHandler
     return new SeamSpace(app, fileHandler!);
 }
 
-export function seamProcedure(): ProcedureBuilder<ProcedureInput, ProcedureOutput> {
+export function seamProcedure(): ProcedureBuilder<ProcedureInput, ProcedureOutput, ProcedureErrors> {
     return createProcedureBuilder();
 }
 
-function createProcedureBuilder(definition: SeamProcedure<ProcedureInput, ProcedureOutput> = {}): ProcedureBuilder<ProcedureInput, ProcedureOutput> {
+function createProcedureBuilder(
+    definition: SeamProcedure<ProcedureInput, ProcedureOutput, ProcedureErrors> = {}
+): ProcedureBuilder<ProcedureInput, ProcedureOutput, ProcedureErrors> {
     return {
         _def: definition,
         input: schema => createProcedureBuilder({
@@ -101,6 +124,10 @@ function createProcedureBuilder(definition: SeamProcedure<ProcedureInput, Proced
             ...definition,
             output: schema,
         }) as any,
+        errors: errors => createProcedureBuilder({
+            ...definition,
+            errors
+        }) as any,
         handler: handler => createProcedureBuilder({
             ...definition,
             handler
@@ -109,10 +136,10 @@ function createProcedureBuilder(definition: SeamProcedure<ProcedureInput, Proced
 }
 
 export class SeamRouter {
-    private router: Router;
     private procedures: ProcedureList = {};
+    private router: Router;
 
-    constructor(private seamSpace: SeamSpace, private path: string) {
+    constructor(private seamSpace: SeamSpace, path: string) {
         this.router = Router();
 
         this.router.post("/:procName", async (req: Request, res: Response, next: NextFunction) => {
@@ -157,9 +184,21 @@ export class SeamRouter {
                 response: res,
                 next
             };
+
             try {
-                output = await procedure.handler({ input: validatedInput!, ctx });
+                output = await procedure.handler({ input: validatedInput!, ctx, error: errorHandler });
             } catch (error) {
+                let errorResult: ResError = { rpcError: false };
+
+                if (error instanceof RpcError) {
+                    errorResult = {
+                        rpcError: true,
+                        error: {
+                            code: error.code,
+                            data: error.data,
+                        }
+                    };
+                }
                 seamSpace.emit("apiError", error, {
                     routerPath: path,
                     procedureName: req.params.procName,
@@ -171,7 +210,7 @@ export class SeamRouter {
                     response: res,
                     next,
                 });
-                res.status(400).send({ error: String(error) });
+                res.status(400).json(errorResult);
                 return;
             }
 
@@ -292,7 +331,7 @@ export class SeamRouter {
         return schema.parse(data);
     }
 
-    public addProcedures(procedures: Record<string, ProcedureBuilder<any, any>>) {
+    public addProcedures(procedures: ProcedureBuilderList) {
         for (const proc in procedures) {
             this.procedures[proc] = procedures[proc]._def;
         }
@@ -302,23 +341,15 @@ export class SeamRouter {
 export class SeamSpace extends EventEmitter<SeamEvents> {
     private _jsonParser = express.json();
 
-    constructor(private _app: Express, private _fileHandler: RequestHandler) {
-        super();
+    constructor(private _app: Express, private _fileHandler: RequestHandler) { super(); }
+
+    public createRouter(path: string, procedures: ProcedureBuilderList = {}): SeamRouter {
+        const router = new SeamRouter(this, path);
+        router.addProcedures(procedures);
+        return router;
     }
 
-    public createRouter(path: string): SeamRouter {
-        return new SeamRouter(this, path);
-    }
-
-    public get app() {
-        return this._app;
-    }
-
-    public get jsonParser() {
-        return this._jsonParser;
-    }
-
-    public get fileHandler() {
-        return this._fileHandler;
-    }
+    public get app() { return this._app; }
+    public get jsonParser() { return this._jsonParser; }
+    public get fileHandler() { return this._fileHandler; }
 }

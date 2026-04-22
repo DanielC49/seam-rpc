@@ -4,7 +4,6 @@ import fg from "fast-glob";
 import ts from "typescript";
 import * as z from "zod";
 import { zodToTs, createAuxiliaryTypeStore, printNode } from "zod-to-ts";
-import { ProcedureBuilder } from "../index.js";
 import { existsSync, writeFileSync } from "fs";
 import { SeamConfig } from "./index.js";
 
@@ -38,7 +37,7 @@ export async function generateClient() {
         );
 
     } catch (err: any) {
-        console.error("❌ Failed to generate client file:", err.message);
+        console.error("❌ Failed to generate client file:", err.message + "\n\n", err.stack);
         process.exit(1);
     }
 }
@@ -133,7 +132,7 @@ export async function generateClientFile({
     }
 
     const mod = await import("file://" + jsFile);
-    const procedures: Record<string, ProcedureBuilder<any, any>> = mod.default;
+    const procedures: Record<string, any> = mod.default;
     const routerName = path.basename(jsFile, path.extname(jsFile));
     const comments = getProcedureComments(tsFile);
 
@@ -144,7 +143,7 @@ export async function generateClientFile({
  * +===================================+
  */
 
-import { callApi } from "@seam-rpc/client";
+import { callApi, Result, RpcError } from "@seam-rpc/client";
 
 `;
 
@@ -173,14 +172,17 @@ import { callApi } from "@seam-rpc/client";
             }
         }
 
-        const returnType = proc._def.output ? convert(proc._def.output) : "void";
+        const dataType = proc._def.output ? convert(proc._def.output) : "void";
+        const errors = Object.entries(proc._def.errors ?? {});
+        const errorType = errors.map(e => `RpcError<"${e[0]}", ${convert(e[1] as any)}>`).join(" | ");
+        const fullReturnType = `Result<${dataType}${errors.length > 0 ? `, ${errorType}` : ""}>`;
         const params = hasInput ? `input: ${inputType}` : "";
         const args = [`"${routerName}"`, `"${name}"`];
         if (hasInput) args.push("input");
         const call = `callApi(${args.join(", ")})`;
         const comment = comments[name] ? comments[name] + "\n" : "";
 
-        const func = `${comment}export function ${name}(${params}): Promise<${returnType}> {
+        const func = `${comment}export function ${name}(${params}): Promise<${fullReturnType}> {
     return ${call};
 }`;
 
