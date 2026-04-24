@@ -13,46 +13,6 @@ import { callApi, Result, RpcError } from "@seam-rpc/client";
  * @param age The age of the user.
  * @returns The newly created user.
  */
-export function createUser(input: { name: string; age: number }): Promise<Result<{
-    id: string;
-    name: string;
-    age: number;
-}, RpcError<"user_name_already_exists", {
-    name: string;
-}>>> {
+export function createUser(input: { name: string; age: number }): Promise<{ ok: false; error: string; data?: undefined; } | { ok: true; data: { id: string; name: string; age: number; }; error?: undefined; }> {
     return callApi("users", "createUser", input);
-}
-
-/**
- * Gets a user by ID.
- * @param id The ID of the user.
- * @returns The user object.
- */
-export function getUser(input: { id: string }): Promise<Result<{
-    id: string;
-    name: string;
-    age: number;
-}>> {
-    return callApi("users", "getUser", input);
-}
-
-/**
- * Gets the list of all users.
- * @returns Array of users.
- */
-export function getUsers(): Promise<Result<{
-    id: string;
-    name: string;
-    age: number;
-}[]>> {
-    return callApi("users", "getUsers");
-}
-
-/**
- * Uploads a file.
- * @param buffer The file buffer.
- * @returns void.
- */
-export function uploadFile(input: { file: File }): Promise<Result<File>> {
-    return callApi("users", "uploadFile", input);
 }

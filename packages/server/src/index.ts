@@ -1,4 +1,4 @@
-import { extractFiles, injectFiles, ResError, RpcError } from "@seam-rpc/core";
+import { extractFiles, injectFiles, ResError, Result, RpcError } from "@seam-rpc/core";
 import EventEmitter from "events";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
 import FormData from "form-data";
@@ -45,7 +45,7 @@ export interface SeamEvents {
 // Procedures
 
 type ProcedureHandler<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> =
-    (options: ProcedureOptions<Input, Errors>) => z.infer<Output> | Promise<z.infer<Output>>;
+    (options: ProcedureOptions<Input, Errors>) => Result<z.infer<Output>, unknown> | Promise<Result<z.infer<Output>, unknown>>;
 
 interface ProcedureOptions<Input extends ProcedureInput, Errors extends ProcedureErrors> {
     input: Simplify<ProcedureInputData<Input>>;

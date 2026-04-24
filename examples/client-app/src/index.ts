@@ -47,7 +47,7 @@ const usersService = {
         if (res.ok) {
             console.log("Created user:", res.data);
         } else {
-            console.log("Failed to create user: " + res.error.data.name);
+            // console.log("Failed to create user: " + res.error.data.name);
         }
     }
 };

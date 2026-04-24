@@ -1,4 +1,4 @@
-export type Result<Data, Error extends RpcError | undefined = undefined> =
+export type Result<Data, Error = undefined> =
     | { ok: true; data: Data }
     | { ok: false; error: Error };
 

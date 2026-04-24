@@ -20,29 +20,27 @@ export async function generateClient() {
         return "." + path.slice(rootPath.length);
     }
 
-    try {
-        const outputFiles: string[] = [];
+    // try {
+    const outputFiles: string[] = [];
 
-        for (let i = 0; i < sourceFiles.length; i++) {
-            const sourceFile = sourceFiles[i];
-            const path = await generateClientFile({ tsPath: sourceFile, jsPath: compiledFolder, outputPath });
-            const symb = i < sourceFiles.length - 1 ? " ├╴" : " └╴";
-            outputFiles.push(symb + removeRootPath(path));
-        }
-
-        console.log(
-            "\x1b[32m\x1b[1m%s\x1b[0m\n\x1b[94m%s\x1b[0m",
-            `✅ Successfully generated client files at ${config.outputFolder}`,
-            `${outputFiles.join("\n")}`
-        );
-
-    } catch (err: any) {
-        console.error("❌ Failed to generate client file:", err.message + "\n\n", err.stack);
-        process.exit(1);
+    for (let i = 0; i < sourceFiles.length; i++) {
+        const sourceFile = sourceFiles[i];
+        const path = await generateClientFile({ tsPath: sourceFile, jsPath: compiledFolder, outputPath });
+        const symb = i < sourceFiles.length - 1 ? " ├╴" : " └╴";
+        outputFiles.push(symb + removeRootPath(path));
     }
+
+    console.log(
+        "\x1b[32m\x1b[1m%s\x1b[0m\n\x1b[94m%s\x1b[0m",
+        `✅ Successfully generated client files at ${config.outputFolder}`,
+        `${outputFiles.join("\n")}`
+    );
+
+    // } catch (err: any) {
+    //     console.error("❌ Failed to generate client file:", err.message + "\n\n", err.stack);
+    //     process.exit(1);
+    // }
 }
-
-
 
 function loadConfig(): SeamConfig | null {
     // Check if config exists
@@ -62,25 +60,84 @@ interface GenerateOptions {
 }
 
 // Extracts comments from TS file.
-function getProcedureComments(filePath: string) {
+export function getProcedureMetadata(filePath: string) {
     const sourceText = fs.readFileSync(filePath, "utf8");
 
-    const sourceFile = ts.createSourceFile(
-        filePath,
-        sourceText,
-        ts.ScriptTarget.Latest,
-        true
-    );
+    const program = ts.createProgram([filePath], {
+        target: ts.ScriptTarget.Latest,
+        module: ts.ModuleKind.CommonJS,
+        strict: true,
+    });
 
-    const comments: Record<string, string> = {};
+    const checker = program.getTypeChecker();
+
+    const sourceFile = program.getSourceFile(filePath);
+    if (!sourceFile) return {};
+
+    const metadata: Record<
+        string,
+        { comment: string; returnType?: string }
+    > = {};
+
+    function getHandlerReturnType(node: ts.Expression): string | undefined {
+        let current: ts.Expression | undefined = node;
+
+        while (current) {
+            if (
+                ts.isCallExpression(current) &&
+                ts.isPropertyAccessExpression(current.expression)
+            ) {
+                const prop: any = current.expression;
+
+                if (prop.name.text === "handler") {
+                    const handlerFn = current.arguments[0];
+
+                    if (
+                        handlerFn &&
+                        (ts.isArrowFunction(handlerFn) ||
+                            ts.isFunctionExpression(handlerFn))
+                    ) {
+                        const signature =
+                            checker.getSignatureFromDeclaration(handlerFn);
+
+                        if (!signature) return;
+
+                        const returnType =
+                            checker.getReturnTypeOfSignature(signature);
+
+                        return checker.typeToString(returnType);
+                    }
+                }
+
+                current = prop.expression;
+                continue;
+            }
+
+            break;
+        }
+
+        return;
+    }
 
     function visit(node: ts.Node) {
         if (ts.isVariableStatement(node)) {
             const comment = getFullComment(node, sourceText);
 
             for (const decl of node.declarationList.declarations) {
-                if (ts.isIdentifier(decl.name))
-                    comments[decl.name.text] = comment;
+                if (!ts.isIdentifier(decl.name)) continue;
+
+                const name = decl.name.text;
+
+                let returnType: string | undefined;
+
+                if (decl.initializer) {
+                    returnType = getHandlerReturnType(decl.initializer);
+                }
+
+                metadata[name] = {
+                    comment,
+                    returnType,
+                };
             }
         }
 
@@ -88,7 +145,8 @@ function getProcedureComments(filePath: string) {
     }
 
     visit(sourceFile);
-    return comments;
+
+    return metadata;
 }
 
 function getFullComment(node: ts.Node, sourceText: string): string {
@@ -134,7 +192,7 @@ export async function generateClientFile({
     const mod = await import("file://" + jsFile);
     const procedures: Record<string, any> = mod.default;
     const routerName = path.basename(jsFile, path.extname(jsFile));
-    const comments = getProcedureComments(tsFile);
+    const procMetadata = getProcedureMetadata(tsFile);
 
     let output = `/**
  * +===================================+
@@ -172,17 +230,18 @@ import { callApi, Result, RpcError } from "@seam-rpc/client";
             }
         }
 
-        const dataType = proc._def.output ? convert(proc._def.output) : "void";
-        const errors = Object.entries(proc._def.errors ?? {});
-        const errorType = errors.map(e => `RpcError<"${e[0]}", ${convert(e[1] as any)}>`).join(" | ");
-        const fullReturnType = `Result<${dataType}${errors.length > 0 ? `, ${errorType}` : ""}>`;
+        // const dataType = proc._def.output ? convert(proc._def.output) : "void";
+        // const errors = Object.entries(proc._def.errors ?? {});
+        // const errorType = errors.map(e => `RpcError<"${e[0]}", ${convert(e[1] as any)}>`).join(" | ");
+        // const fullReturnType = `Promise<Result<${dataType}${errors.length > 0 ? `, ${errorType}` : ""}>>`;
+        const fullReturnType = procMetadata[name].returnType;
         const params = hasInput ? `input: ${inputType}` : "";
         const args = [`"${routerName}"`, `"${name}"`];
         if (hasInput) args.push("input");
         const call = `callApi(${args.join(", ")})`;
-        const comment = comments[name] ? comments[name] + "\n" : "";
+        const comment = procMetadata[name].comment ? procMetadata[name].comment + "\n" : "";
 
-        const func = `${comment}export function ${name}(${params}): Promise<${fullReturnType}> {
+        const func = `${comment}export function ${name}(${params}): ${fullReturnType} {
     return ${call};
 }`;
 

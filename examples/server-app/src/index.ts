@@ -3,13 +3,13 @@ import { createSeamSpace } from "@seam-rpc/server";
 
 // Import procedure definitions
 import usersRouter from "./api/users.js";
-import postsRouter from "./api/posts.js";
+// import postsRouter from "./api/posts.js";
 
 const app = express();
 const seamSpace = await createSeamSpace(app);
 
 seamSpace.createRouter("/users", usersRouter);
-seamSpace.createRouter("/posts", postsRouter);
+// seamSpace.createRouter("/posts", postsRouter);
 
 // Handle errors
 
