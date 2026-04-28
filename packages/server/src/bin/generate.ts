@@ -213,20 +213,27 @@ import { callApi, Result, RpcError } from "@seam-rpc/client";
         let hasInput = false;
 
         if (proc._def.input) {
-            const fields: string[] = [];
+            try {
+                
+                const fields: string[] = [];
 
-            for (const [key, schema] of Object.entries(proc._def.input)) {
-                const isOptional =
-                    (schema as any).isOptional?.() ?? false;
+                for (const [key, schema] of Object.entries(proc._def.input)) {
+                    const isOptional =
+                        (schema as any).isOptional?.() ?? false;
 
-                const tsType = convert(schema as z.ZodType);
+                    const tsType = convert(schema as z.ZodType);
 
-                fields.push(`${key}${isOptional ? "?" : ""}: ${tsType}`);
-            }
+                    fields.push(`${key}${isOptional ? "?" : ""}: ${tsType}`);
+                }
 
-            if (fields.length > 0) {
-                inputType = `{ ${fields.join("; ")} }`;
-                hasInput = true;
+                if (fields.length > 0) {
+                    inputType = `{ ${fields.join("; ")} }`;
+                    hasInput = true;
+                }
+
+            } catch (e) {
+                console.error(`Failed to process input of procedure "${name}".`);
+                process.exit(1);
             }
         }
 
