@@ -201,7 +201,7 @@ export async function generateClientFile({
  * +===================================+
  */
 
-import { callApi, Result, RpcError } from "@seam-rpc/client";
+import { callApi } from "@seam-rpc/client";
 
 `;
 
