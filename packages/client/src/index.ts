@@ -77,7 +77,7 @@ export function createSeamClient(baseUrl: string, options?: SeamClientOptions): 
     return new SeamClient(baseUrl, options);
 }
 
-export async function callApi(routerName: string, funcName: string, input?: Record<string, any>): Promise<Result<any, any>> {
+export async function callApi(routerName: string, funcName: string, input?: Record<string, any>): Promise<any> {
     if (!SeamClient._instance)
         throw new Error("Seam Client not instantiated.");
 
