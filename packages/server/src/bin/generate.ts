@@ -166,10 +166,44 @@ function getFullComment(node: ts.Node, sourceText: string): string {
     return "";
 }
 
-function convert(schema: z.ZodType): string {
+// function convert(schema: z.ZodType): string {
+//     const store = createAuxiliaryTypeStore();
+//     const { node } = zodToTs(schema, { auxiliaryTypeStore: store });
+//     return printNode(node);
+// }
+
+function convert(schema: z.ZodTypeAny): string {
     const store = createAuxiliaryTypeStore();
-    const { node } = zodToTs(schema, { auxiliaryTypeStore: store });
-    return printNode(node);
+
+    const { node } = zodToTs(schema, {
+        auxiliaryTypeStore: store,
+    });
+
+    const typeAlias = ts.factory.createTypeAliasDeclaration(
+        [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
+        ts.factory.createIdentifier("GeneratedType"),
+        undefined,
+        node
+    );
+
+    const file = ts.createSourceFile(
+        "types.ts",
+        "",
+        ts.ScriptTarget.Latest,
+        false,
+        ts.ScriptKind.TS
+    );
+
+    const printer = ts.createPrinter({
+        newLine: ts.NewLineKind.LineFeed,
+        removeComments: false,
+    });
+
+    return printer.printNode(
+        ts.EmitHint.Unspecified,
+        typeAlias,
+        file
+    );
 }
 
 export async function generateClientFile({
@@ -214,7 +248,7 @@ import { callApi } from "@seam-rpc/client";
 
         if (proc._def.input) {
             try {
-                
+
                 const fields: string[] = [];
 
                 for (const [key, schema] of Object.entries(proc._def.input)) {
