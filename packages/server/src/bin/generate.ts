@@ -105,7 +105,12 @@ export function getProcedureMetadata(filePath: string) {
                         const returnType =
                             checker.getReturnTypeOfSignature(signature);
 
-                        return checker.typeToString(returnType);
+                        return checker.typeToString(returnType,
+                            undefined,
+                            ts.TypeFormatFlags.NoTruncation |
+                            ts.TypeFormatFlags.WriteArrayAsGenericType |
+                            ts.TypeFormatFlags.UseFullyQualifiedType
+                        );
                     }
                 }
 
@@ -166,44 +171,10 @@ function getFullComment(node: ts.Node, sourceText: string): string {
     return "";
 }
 
-// function convert(schema: z.ZodType): string {
-//     const store = createAuxiliaryTypeStore();
-//     const { node } = zodToTs(schema, { auxiliaryTypeStore: store });
-//     return printNode(node);
-// }
-
-function convert(schema: z.ZodTypeAny): string {
+function convert(schema: z.ZodType): string {
     const store = createAuxiliaryTypeStore();
-
-    const { node } = zodToTs(schema, {
-        auxiliaryTypeStore: store,
-    });
-
-    const typeAlias = ts.factory.createTypeAliasDeclaration(
-        [ts.factory.createModifier(ts.SyntaxKind.ExportKeyword)],
-        ts.factory.createIdentifier("GeneratedType"),
-        undefined,
-        node
-    );
-
-    const file = ts.createSourceFile(
-        "types.ts",
-        "",
-        ts.ScriptTarget.Latest,
-        false,
-        ts.ScriptKind.TS
-    );
-
-    const printer = ts.createPrinter({
-        newLine: ts.NewLineKind.LineFeed,
-        removeComments: false,
-    });
-
-    return printer.printNode(
-        ts.EmitHint.Unspecified,
-        typeAlias,
-        file
-    );
+    const { node } = zodToTs(schema, { auxiliaryTypeStore: store });
+    return printNode(node);
 }
 
 export async function generateClientFile({

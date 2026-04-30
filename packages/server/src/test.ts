@@ -36,25 +36,46 @@ export function convert(schema: z.ZodTypeAny): string {
     );
 }
 
-console.log(convert(z.object({
-    test: z.object({
-        a: z.string(),
-        b: z.string(),
-        c: z.string(),
-        d: z.string(),
-        e: z.string(),
-        f: z.string(),
-        ga: z.string(),
-        wea: z.string(),
-        waa: z.string(),
-        wga: z.string(),
-        weega: z.string(),
-        wwa: z.string(),
-        af: z.string(),
-        wha: z.string(),
-        ag: z.string(),
-        wwea: z.string(),
-        we3a: z.string(),
-        wada: z.string(),
+function convert2(schema: z.ZodType): string {
+    const store = createAuxiliaryTypeStore();
+    const { node } = zodToTs(schema, { auxiliaryTypeStore: store });
+    return printNode(node);
+}
+
+console.log(convert2(
+    z.object({
+        user: z.object({
+            email: z.string(),
+            id: z.string(),
+            createdAt: z.date(),
+            firstName: z.string(),
+            lastName: z.string(),
+            trackingStartDate: z.string(),
+            trackingWorkItemId: z.string(),
+        }),
+        roles: z.object({
+            id: z.string(),
+            name: z.string(),
+            createdAt: z.date(),
+            permissions: z.number().array(),
+            projectId: z.string(),
+        }),
+        workItems: z.object({
+            id: z.string(),
+            createdAt: z.date(),
+            date: z.date(),
+            link: z.string(),
+            title: z.string(),
+            description: z.string(),
+            projectId: z.string(),
+            authorId: z.string(),
+            durationMethod: z.string(),
+            startTime: z.number(),
+            endTime: z.number(),
+            duration: z.number(),
+            labels: z.string(),
+            updatedAt: z.string(),
+            projectMemberId: z.string(),
+        })
     })
-})));
+));
