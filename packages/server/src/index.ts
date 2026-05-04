@@ -216,7 +216,7 @@ export class SeamRouter {
 
             // Validate output
             try {
-                validatedOutput = this.validateOutput(output, procedure.output);
+                validatedOutput = this.validateOutput(output, z.object({ ok: true, data: procedure.output }).or(z.object({ ok: false, error: z.any() })));
             } catch (err) {
                 seamSpace.emit("outputValidationError", err, {
                     routerPath: path,
