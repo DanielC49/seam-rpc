@@ -13,30 +13,6 @@ import { callApi } from "@seam-rpc/client";
  * @param age The age of the user.
  * @returns The newly created user.
  */
-export function createUser(input: { name: string; age: number }): Promise<{
-    id: string;
-    name: string;
-    age: number;
-}> {
+export function createUser(input: { name: string; age: number }): Promise<{ ok: false; error: string; data?: undefined; } | { ok: true; data: { id: string; name: string; age: number; }; error?: undefined; }> {
     return callApi("users", "createUser", input);
-}
-
-export function getUser(input: { id: string }): Promise<{
-    id: string;
-    name: string;
-    age: number;
-} | undefined> {
-    return callApi("users", "getUser", input);
-}
-
-export function getUsers(): Promise<{
-    id: string;
-    name: string;
-    age: number;
-}[]> {
-    return callApi("users", "getUsers");
-}
-
-export function uploadFile(input: { file: File }): Promise<File> {
-    return callApi("users", "uploadFile", input);
 }

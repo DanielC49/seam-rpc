@@ -107,8 +107,7 @@ export function getProcedureMetadata(filePath: string) {
 
                         return checker.typeToString(returnType,
                             undefined,
-                            ts.TypeFormatFlags.NoTruncation |
-                            ts.TypeFormatFlags.UseFullyQualifiedType
+                            ts.TypeFormatFlags.NoTruncation
                         );
                     }
                 }
