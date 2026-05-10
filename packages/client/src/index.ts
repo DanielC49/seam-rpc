@@ -111,7 +111,7 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
             if (resError.rpcError) {
                 return {
                     ok: false,
-                    error: new RpcError(resError.error.code, resError.error.data),
+                    error: RpcError.fromJSON(resError.error),
                 }
             } else {
                 return { ok: false, error: null };
@@ -125,10 +125,7 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
 
     if (contentType.startsWith("application/json")) {
         const data = await res.json();
-        return {
-            ok: true,
-            data: data.result,
-        };
+        return data.result;
     } else if (contentType.startsWith("multipart/form-data")) {
         const formData = await res.formData();
         const jsonPart = JSON.parse(formData.get("json")?.toString() || "[]");
@@ -162,10 +159,7 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
             }
         }
 
-        return {
-            ok: true,
-            data: jsonPart.result,
-        };
+        return jsonPart.result;
     } else {
         return { ok: false, error: null };
     }

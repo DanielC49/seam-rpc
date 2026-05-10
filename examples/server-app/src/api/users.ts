@@ -1,4 +1,4 @@
-import { Result } from "@seam-rpc/core";
+import { Result, RpcError } from "@seam-rpc/core";
 import { seamProcedure } from "@seam-rpc/server";
 // import { readFileSync } from "fs";
 import z from "zod";
@@ -36,7 +36,7 @@ const createUser = seamProcedure()
 const userService = {
     async createUser(name: string, age: number) {
         if (users.find(u => u.name == name)) {
-            return { ok: false, error: "user_name_already_exists" };
+            return { ok: false, error: new RpcError("user_name_already_exists") };
         }
 
         const user = {
@@ -52,8 +52,12 @@ const userService = {
 } satisfies Service;
 
 interface Service {
-    [funcName: string]: (...args: any[]) => Promise<Result<unknown, unknown>>;
+    [funcName: string]: (...args: any[]) => Promise<Result<unknown, RpcError<ErrorMap>>>;
 }
+
+type ErrorMap = {
+    user_name_already_exists: undefined,
+};
 
 // /**
 // * Creates a new user and returns it.

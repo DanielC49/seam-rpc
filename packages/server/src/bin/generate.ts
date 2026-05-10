@@ -182,6 +182,7 @@ export async function generateClientFile({
 }: GenerateOptions) {
     const tsFile = path.resolve(process.cwd(), tsPath);
     const tsFileName = path.basename(tsFile).slice(0, -path.extname(tsFile).length);
+    const routerName = tsFileName.slice(0, tsFileName.indexOf("."));
     const jsFile = path.resolve(process.cwd(), path.join(jsPath, tsFileName + ".js"));
 
     if (!existsSync(tsFile)) {
@@ -194,7 +195,7 @@ export async function generateClientFile({
 
     const mod = await import("file://" + jsFile);
     const procedures: Record<string, any> = mod.default;
-    const routerName = path.basename(jsFile, path.extname(jsFile));
+    // const routerName = path.basename(jsFile, path.extname(jsFile));
     const procMetadata = getProcedureMetadata(tsFile);
 
     let output = `/**
@@ -204,7 +205,7 @@ export async function generateClientFile({
  * +===================================+
  */
 
-import { callApi } from "@seam-rpc/client";
+import { callApi, RpcError } from "@seam-rpc/client";
 
 `;
 

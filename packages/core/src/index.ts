@@ -1,4 +1,4 @@
-export type Result<Data, Error = undefined> =
+export type Result<Data, Error extends RpcError> =
     | { ok: true; data: Data }
     | { ok: false; error: Error };
 
@@ -12,11 +12,11 @@ export type ResError = {
     }
 };
 
-export class RpcError<Code extends string = any, Data = unknown> {
+export class RpcError<ErrorMap extends Record<Code, any> = any, Code extends keyof ErrorMap = keyof ErrorMap> {
     private _code: Code;
-    private _data: Data;
+    private _data?: ErrorMap[Code];
 
-    constructor(code: Code, data: Data) {
+    constructor(code: Code, data?: ErrorMap[Code]) {
         this._code = code;
         this._data = data;
     }
@@ -25,7 +25,15 @@ export class RpcError<Code extends string = any, Data = unknown> {
     public get data() { return this._data; }
 
     public toString() {
-        return this._code + ": " + JSON.stringify(this._data);
+        return this._code.toString() + (this._data !== undefined ? ": " + JSON.stringify(this._data) : "");
+    }
+
+    public toJSON() {
+        return { code: this._code, data: this._data };
+    }
+
+    public static fromJSON(json: { code: any, data: any }) {
+        return new RpcError(json.code, json.data);
     }
 }
 

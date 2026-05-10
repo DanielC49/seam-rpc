@@ -4,6 +4,9 @@ import express, { Express, NextFunction, Request, RequestHandler, Response, Rout
 import FormData from "form-data";
 import * as z from "zod";
 
+export { RpcError };
+export type { Result };
+
 export interface RouterDefinition {
     [procName: string]: (...args: any[]) => Promise<any>;
 };
@@ -45,7 +48,7 @@ export interface SeamEvents {
 // Procedures
 
 type ProcedureHandler<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> =
-    (options: ProcedureOptions<Input, Errors>) => Result<z.infer<Output>, unknown> | Promise<Result<z.infer<Output>, unknown>>;
+    (options: ProcedureOptions<Input, Errors>) => Result<z.infer<Output>, RpcError> | Promise<Result<z.infer<Output>, RpcError>>;
 
 interface ProcedureOptions<Input extends ProcedureInput, Errors extends ProcedureErrors> {
     input: Simplify<ProcedureInputData<Input>>;
@@ -149,13 +152,14 @@ export class SeamRouter {
 
             let input: Record<string, any> | undefined;
             let validatedInput: Record<string, unknown> | undefined | null = undefined;
-            let output: unknown;
-            let validatedOutput: unknown;
+            let output: Result<any, RpcError> | undefined = undefined;
+            let validatedOutput: any;
 
             // Middleware
             try {
                 input = await this.runMiddleware(req, res);
             } catch (err) {
+                console.error(err);
                 return res.status(415).send(String(err));
             }
 
@@ -182,23 +186,19 @@ export class SeamRouter {
             const ctx: SeamContext = {
                 request: req,
                 response: res,
-                next
+                next,
             };
+
+            function toResError(error: unknown): ResError {
+                if (error instanceof RpcError)
+                    return { rpcError: true, error: error.toJSON() };
+                else
+                    return { rpcError: false };
+            }
 
             try {
                 output = await procedure.handler({ input: validatedInput!, ctx, error: errorHandler });
             } catch (error) {
-                let errorResult: ResError = { rpcError: false };
-
-                if (error instanceof RpcError) {
-                    errorResult = {
-                        rpcError: true,
-                        error: {
-                            code: error.code,
-                            data: error.data,
-                        }
-                    };
-                }
                 seamSpace.emit("apiError", error, {
                     routerPath: path,
                     procedureName: req.params.procName,
@@ -208,15 +208,29 @@ export class SeamRouter {
                     validatedOutput,
                     request: req,
                     response: res,
-                    next,
+                    next: () => { res.status(400).json(toResError(error)); return next(); },
                 });
-                res.status(400).json(errorResult);
+                return;
+            }
+
+            if (!output.ok) {
+                seamSpace.emit("apiError", output.error, {
+                    routerPath: path,
+                    procedureName: req.params.procName,
+                    input,
+                    validatedInput,
+                    output,
+                    validatedOutput,
+                    request: req,
+                    response: res,
+                    next: () => { res.status(400).json(toResError(output.error)); return next(); },
+                });
                 return;
             }
 
             // Validate output
             try {
-                validatedOutput = this.validateOutput(output, z.object({ ok: true, data: procedure.output }).or(z.object({ ok: false, error: z.any() })));
+                validatedOutput = this.validateOutput(output, z.object({ ok: z.literal(true), data: procedure.output }).or(z.object({ ok: z.literal(false), error: z.any() })));
             } catch (err) {
                 seamSpace.emit("outputValidationError", err, {
                     routerPath: path,
@@ -270,7 +284,6 @@ export class SeamRouter {
                     response: res,
                     next: next,
                 });
-                console.log("INTERNAL ERROR", error)
                 res.sendStatus(500); //.send({ error: String(error) });
             }
         });
