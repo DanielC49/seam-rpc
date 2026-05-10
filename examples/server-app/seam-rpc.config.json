@@ -1,5 +1,5 @@
 {
-    "source": "./src/api/*",
+    "source": "./src/api/**/procedure.ts",
     "compiledFolder": "./dist/api",
     "outputFolder": "../client-app/src/api"
 }

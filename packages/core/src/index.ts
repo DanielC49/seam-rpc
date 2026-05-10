@@ -1,18 +1,20 @@
-export type Result<Data, Error extends RpcError> =
+export type Result<Data, Error extends ApiError> =
     | { ok: true; data: Data }
     | { ok: false; error: Error };
 
 export type ResError = {
-    rpcError: false;
+    isApiError: false;
 } | {
-    rpcError: true;
-    error: {
-        code: string;
-        data: unknown;
-    }
+    isApiError: true;
+    error: ApiErrorInterface;
 };
 
-export class RpcError<ErrorMap extends Record<Code, any> = any, Code extends keyof ErrorMap = keyof ErrorMap> {
+export interface ApiErrorInterface<ErrorMap extends Record<Code, any> = any, Code extends keyof ErrorMap = keyof ErrorMap> {
+    code: Code;
+    data: ErrorMap[Code];
+}
+
+export class ApiError<ErrorMap extends Record<Code, any> = any, Code extends keyof ErrorMap = keyof ErrorMap> implements ApiErrorInterface {
     private _code: Code;
     private _data?: ErrorMap[Code];
 
@@ -33,7 +35,7 @@ export class RpcError<ErrorMap extends Record<Code, any> = any, Code extends key
     }
 
     public static fromJSON(json: { code: any, data: any }) {
-        return new RpcError(json.code, json.data);
+        return new ApiError(json.code, json.data);
     }
 }
 

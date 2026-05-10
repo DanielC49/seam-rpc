@@ -1,6 +1,6 @@
-import { extractFiles, injectFiles, ResError, RpcError, type Result } from "@seam-rpc/core";
+import { extractFiles, injectFiles, ResError, ApiError, type Result } from "@seam-rpc/core";
 
-export { RpcError };
+export { ApiError as RpcError };
 export type { Result };
 
 export type SeamRequestMiddleware = (context: SeamRequestMiddlewareContext) => void | Promise<void>;
@@ -49,7 +49,7 @@ export class SeamClient {
     }
 }
 
-export class SeamError extends RpcError {
+export class SeamError extends ApiError {
     constructor(code: string) {
         super(code, undefined);
     }
@@ -57,9 +57,7 @@ export class SeamError extends RpcError {
 
 type SeamClientErrorType =
     | "REQUEST_FAILED"
-    | "TIMEOUT"
-    | "PARSE_ERROR"
-    | "INVALID_RESPONSE";
+    | "INVALID_CONTENT_TYPE";
 
 export class SeamClientError extends Error {
     constructor(
@@ -108,17 +106,15 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
     if (!res.ok) {
         if (res.status == 400) {
             const resError: ResError = await res.json();
-            if (resError.rpcError) {
+            if (resError.isApiError) {
                 return {
                     ok: false,
-                    error: RpcError.fromJSON(resError.error),
+                    error: ApiError.fromJSON(resError.error),
                 }
-            } else {
-                return { ok: false, error: null };
             }
+            throw new SeamClientError("REQUEST_FAILED", `Request failed with status ${res.status} ${res.statusText} and non-api error.`, req, null);
         }
-        // throw new Error(`Request failed at router ${routerName} at function ${funcName}, with status ${res.status} ${res.statusText}.`);
-        return { ok: false, error: null };
+        throw new SeamClientError("REQUEST_FAILED", `Request failed with status ${res.status} ${res.statusText}.`, req, null);
     }
 
     const contentType = res.headers.get("content-type") || "";
@@ -126,7 +122,9 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
     if (contentType.startsWith("application/json")) {
         const data = await res.json();
         return data.result;
-    } else if (contentType.startsWith("multipart/form-data")) {
+    }
+
+    if (contentType.startsWith("multipart/form-data")) {
         const formData = await res.formData();
         const jsonPart = JSON.parse(formData.get("json")?.toString() || "[]");
         const pathsPart: (string | number)[][] = JSON.parse(formData.get("paths")?.toString() || "[]");
@@ -160,9 +158,10 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
         }
 
         return jsonPart.result;
-    } else {
-        return { ok: false, error: null };
     }
+
+    throw new SeamClientError("INVALID_CONTENT_TYPE", `Response has invalid content type ${contentType}.`, req, null);
+
 }
 
 function buildRequest(input: Record<string, any> = {}): RequestInit {

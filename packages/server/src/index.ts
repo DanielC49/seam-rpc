@@ -1,10 +1,10 @@
-import { extractFiles, injectFiles, ResError, Result, RpcError } from "@seam-rpc/core";
+import { extractFiles, injectFiles, ResError, Result, ApiError } from "@seam-rpc/core";
 import EventEmitter from "events";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
 import FormData from "form-data";
 import * as z from "zod";
 
-export { RpcError };
+export { ApiError as RpcError };
 export type { Result };
 
 export interface RouterDefinition {
@@ -48,7 +48,7 @@ export interface SeamEvents {
 // Procedures
 
 type ProcedureHandler<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> =
-    (options: ProcedureOptions<Input, Errors>) => Result<z.infer<Output>, RpcError> | Promise<Result<z.infer<Output>, RpcError>>;
+    (options: ProcedureOptions<Input, Errors>) => Result<z.infer<Output>, ApiError> | Promise<Result<z.infer<Output>, ApiError>>;
 
 interface ProcedureOptions<Input extends ProcedureInput, Errors extends ProcedureErrors> {
     input: Simplify<ProcedureInputData<Input>>;
@@ -90,7 +90,7 @@ export type ProcedureBuilder<Input extends ProcedureInput, Output extends Proced
 };
 
 const errorHandler: RpcErrorFactory<ProcedureErrors> = (code, ...args) => {
-    return new RpcError(code, args[0]);
+    return new ApiError(code, args[0]);
 };
 
 export async function createSeamSpace(app: Express, fileHandler?: RequestHandler): Promise<SeamSpace> {
@@ -108,6 +108,10 @@ export async function createSeamSpace(app: Express, fileHandler?: RequestHandler
     }
 
     return new SeamSpace(app, fileHandler!);
+}
+
+export function seamRouter(path: string, procedures: ProcedureBuilderList): SeamRouter {
+    return new SeamRouter(path, procedures);
 }
 
 export function seamProcedure(): ProcedureBuilder<ProcedureInput, ProcedureOutput, ProcedureErrors> {
@@ -138,21 +142,26 @@ function createProcedureBuilder(
     };
 }
 
-export class SeamRouter {
-    private procedures: ProcedureList = {};
-    private router: Router;
+export class SeamRouter extends EventEmitter<SeamEvents> {
+    private _procedures: ProcedureList = {};
+    private _router: Router;
 
-    constructor(private seamSpace: SeamSpace, path: string) {
-        this.router = Router();
+    constructor(path: string, procedures: ProcedureBuilderList) {
+        super();
+        this._router = Router();
+        for (const proc in procedures) {
+            this._procedures[proc] = procedures[proc]._def;
+        }
+        // seamSpace.app.use(path, this._router);
 
-        this.router.post("/:procName", async (req: Request, res: Response, next: NextFunction) => {
-            const procedure = this.procedures[req.params.procName];
+        this._router.post("/:procName", async (req: Request, res: Response, next: NextFunction) => {
+            const procedure = this._procedures[req.params.procName];
             if (!procedure || !procedure.handler)
                 return res.sendStatus(404);
 
             let input: Record<string, any> | undefined;
             let validatedInput: Record<string, unknown> | undefined | null = undefined;
-            let output: Result<any, RpcError> | undefined = undefined;
+            let output: Result<any, ApiError> | undefined = undefined;
             let validatedOutput: any;
 
             // Middleware
@@ -167,7 +176,7 @@ export class SeamRouter {
             try {
                 validatedInput = this.validateInput(input, procedure.input);
             } catch (err) {
-                seamSpace.emit("inputValidationError", err, {
+                this.emit("inputValidationError", err, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
@@ -190,16 +199,16 @@ export class SeamRouter {
             };
 
             function toResError(error: unknown): ResError {
-                if (error instanceof RpcError)
-                    return { rpcError: true, error: error.toJSON() };
+                if (error instanceof ApiError)
+                    return { isApiError: true, error: error.toJSON() };
                 else
-                    return { rpcError: false };
+                    return { isApiError: false };
             }
 
             try {
                 output = await procedure.handler({ input: validatedInput!, ctx, error: errorHandler });
             } catch (error) {
-                seamSpace.emit("apiError", error, {
+                this.emit("apiError", error, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
@@ -214,7 +223,7 @@ export class SeamRouter {
             }
 
             if (!output.ok) {
-                seamSpace.emit("apiError", output.error, {
+                this.emit("apiError", output.error, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
@@ -232,7 +241,7 @@ export class SeamRouter {
             try {
                 validatedOutput = this.validateOutput(output, z.object({ ok: z.literal(true), data: procedure.output }).or(z.object({ ok: z.literal(false), error: z.any() })));
             } catch (err) {
-                seamSpace.emit("outputValidationError", err, {
+                this.emit("outputValidationError", err, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
@@ -273,7 +282,7 @@ export class SeamRouter {
                 res.writeHead(200, form.getHeaders());
                 form.pipe(res);
             } catch (error) {
-                seamSpace.emit("internalError", error, {
+                this.emit("internalError", error, {
                     routerPath: path,
                     procedureName: req.params.procName,
                     input,
@@ -287,8 +296,10 @@ export class SeamRouter {
                 res.sendStatus(500); //.send({ error: String(error) });
             }
         });
+    }
 
-        seamSpace.app.use(path, this.router);
+    get router() {
+        return this._router;
     }
 
     private async runMiddleware(req: Request, res: Response) {
@@ -342,12 +353,6 @@ export class SeamRouter {
             throw new Error("No data was received, but data was expected.");
 
         return schema.parse(data);
-    }
-
-    public addProcedures(procedures: ProcedureBuilderList) {
-        for (const proc in procedures) {
-            this.procedures[proc] = procedures[proc]._def;
-        }
     }
 }
 

@@ -1,6 +1,5 @@
 import { createSeamClient } from "@seam-rpc/client";
-import * as user from "./api/users.js";
-import * as post from "./api/posts.js";
+import { createUser } from "./api/user.js";
 
 const client = createSeamClient("http://localhost:3000");
 
@@ -19,8 +18,12 @@ client.postRequest(ctx => {
 
 async function test() {
     try {
-        usersService.createUser("John", 25);
-        usersService.createUser("John", 20);
+        const res = await createUser({ name: "John", age: 25 });
+        if (res.ok) {
+            console.log("Created user:", res.data);
+        } else {
+            console.log("Failed to create user: " + res.error.code);
+        }
 
         // const createdUser = await user.getUser({ id: newUser.id });
         // console.log("Created user data:", createdUser);
@@ -41,15 +44,8 @@ async function test() {
     }
 }
 
-const usersService = {
-    async createUser(name: string, age: number) {
-        const res = await user.createUser({ name: "John", age: 25 });
-        if (res.ok) {
-            console.log("Created user:", res.data);
-        } else {
-            // console.log("Failed to create user: " + res.error.data.name);
-        }
-    }
-};
-
 test();
+
+export type ErrorMap = {
+    user_name_already_exists: undefined,
+};

@@ -181,6 +181,7 @@ export async function generateClientFile({
     outputPath,
 }: GenerateOptions) {
     const tsFile = path.resolve(process.cwd(), tsPath);
+
     const tsFileName = path.basename(tsFile).slice(0, -path.extname(tsFile).length);
     const routerName = tsFileName.slice(0, tsFileName.indexOf("."));
     const jsFile = path.resolve(process.cwd(), path.join(jsPath, tsFileName + ".js"));
