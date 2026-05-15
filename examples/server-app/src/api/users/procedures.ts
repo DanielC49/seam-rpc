@@ -33,6 +33,8 @@ const createUser = seamProcedure()
         return await userService.createUser(input.name, input.age);
     });
 
+export default seamRouter("users", { createUser });
+
 const userService = {
     async createUser(name: string, age: number) {
         if (users.find(u => u.name == name)) {
@@ -136,4 +138,3 @@ type ErrorMap = {
 //     });
 
 // export default { createUser }; //, getUser, getUsers, uploadFile };
-export default seamRouter({ createUser });
