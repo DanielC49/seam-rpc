@@ -1,65 +1,22 @@
-import { Result, ApiError } from "@seam-rpc/core";
-import { seamProcedure, seamRouter } from "@seam-rpc/server";
-// import { readFileSync } from "fs";
+import { seamProcedure } from "@seam-rpc/server";
+import { outputUser } from "./validations.js";
+import { userService } from "./service.js";
 import z from "zod";
 
-export interface User {
-    id: string;
-    name: string;
-    age: number;
-}
-
-export const outputUser = z.object({
-    id: z.string(),
-    name: z.string(),
-    age: z.int(),
-});
-
-export const users: User[] = [];
-
-/**
- * Creates a new user and returns it.
- * @param name The name of the user.
- * @param age The age of the user.
- * @returns The newly created user.
- */
-const createUser = seamProcedure()
-    .input({
-        name: z.string().min(3).max(200),
-        age: z.int().min(1).max(150),
-    })
-    .output(outputUser)
-    .handler(async ({ input }) => {
-        return await userService.createUser(input.name, input.age);
-    });
-
-export default seamRouter("users", { createUser });
-
-const userService = {
-    async createUser(name: string, age: number) {
-        if (users.find(u => u.name == name)) {
-            return { ok: false, error: new ApiError("user_name_already_exists") };
-        }
-
-        const user = {
-            id: Date.now().toString(),
-            name: name,
-            age: age,
-        };
-
-        users.push(user);
-
-        return { ok: true, data: user };
-    }
-} satisfies Service;
-
-interface Service {
-    [funcName: string]: (...args: any[]) => Promise<Result<unknown, ApiError<ErrorMap>>>;
-}
-
-type ErrorMap = {
-    user_name_already_exists: undefined,
+export const usersRouter = {
+    createUser: seamProcedure()
+        .input({
+            name: z.string().min(3).max(200),
+            age: z.int().min(1).max(150),
+        })
+        .output(outputUser)
+        .handler(async ({ input }) => {
+            return await userService.createUser(input.name, input.age);
+        }),
 };
+
+
+// const usersRouter = seamRouter("users", { createUser });
 
 // /**
 // * Creates a new user and returns it.

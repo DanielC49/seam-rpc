@@ -7,10 +7,6 @@ import * as z from "zod";
 export { ApiError as RpcError };
 export type { Result };
 
-export interface RouterDefinition {
-    [procName: string]: (...args: any[]) => Promise<any>;
-};
-
 type Simplify<T> =
     T extends File
     ? File
@@ -65,28 +61,26 @@ type RpcErrorFactory<Errors extends ProcedureErrors> = <Code extends keyof Error
 
 type ProcedureInput = Record<string, z.ZodType>;
 type ProcedureOutput = z.ZodType;
-type ProcedureErrors = Record<string, z.ZodType>;
-
-type ProcedureList = Record<string, SeamProcedure<any, any, any>>;
-type ProcedureBuilderList = Record<string, ProcedureBuilder<any, any, any>>;
+type ProcedureErrors = Record<string, z.ZodType | undefined>;
 
 type ProcedureInputData<T extends ProcedureInput> = {
     [K in keyof T]: z.infer<T[K]>;
 };
 
-interface SeamProcedure<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> {
+interface SeamProcedure<Input extends ProcedureInput = {}, Output extends ProcedureOutput = z.ZodUndefined, Errors extends ProcedureErrors = {}> {
     input?: Input;
     output?: Output;
     errors?: Errors;
     handler?: ProcedureHandler<Input, Output, Errors>;
 }
 
-export type ProcedureBuilder<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> = {
+export type ProcedureBuilder<Input extends ProcedureInput = {}, Output extends ProcedureOutput = z.ZodUndefined, Errors extends ProcedureErrors = {}> = {
     _def: SeamProcedure<Input, Output, Errors>;
     input: <T extends ProcedureInput>(schema: T) => ProcedureBuilder<T, Output, Errors>;
     output: <T extends ProcedureOutput>(schema: T) => ProcedureBuilder<Input, T, Errors>;
     errors: <T extends ProcedureErrors>(errors: T) => ProcedureBuilder<Input, Output, T>;
-    handler: (handler: ProcedureHandler<Input, Output, Errors>) => ProcedureBuilder<Input, Output, Errors>;
+    handler: <T extends Result<Output, any>> (handler: ProcedureHandler<Input, Output, T extends Result<Output, infer E> ? E : {}>) =>
+        ProcedureBuilder<Input, Output, T extends Result<Output, infer E> ? E : {}>;
 };
 
 const errorHandler: RpcErrorFactory<ProcedureErrors> = (code, ...args) => {
@@ -110,250 +104,256 @@ export async function createSeamSpace(app: Express, fileHandler?: RequestHandler
     return new SeamSpace(app, fileHandler!);
 }
 
-export function seamRouter(path: string, procedures: ProcedureBuilderList): SeamRouter {
-    return new SeamRouter(path, procedures);
-}
-
-export function seamProcedure(): ProcedureBuilder<ProcedureInput, ProcedureOutput, ProcedureErrors> {
+export function seamProcedure(): ProcedureBuilder {
     return createProcedureBuilder();
 }
 
-function createProcedureBuilder(
-    definition: SeamProcedure<ProcedureInput, ProcedureOutput, ProcedureErrors> = {}
-): ProcedureBuilder<ProcedureInput, ProcedureOutput, ProcedureErrors> {
+function createProcedureBuilder<Input extends ProcedureInput = {}, Output extends ProcedureOutput = z.ZodUndefined, Errors extends ProcedureErrors = {}>(
+    definition: SeamProcedure<Input, Output, Errors> = {}
+): ProcedureBuilder<Input, Output, Errors> {
     return {
         _def: definition,
-        input: schema => createProcedureBuilder({
+        input: schema => createProcedureBuilder<typeof schema, Output, Errors>({
             ...definition,
             input: schema,
-        }) as any,
-        output: schema => createProcedureBuilder({
+        } as any),
+        output: schema => createProcedureBuilder<Input, typeof schema, Errors>({
             ...definition,
             output: schema,
-        }) as any,
-        errors: errors => createProcedureBuilder({
+        } as any),
+        errors: errors => createProcedureBuilder<Input, Output, typeof errors>({
             ...definition,
-            errors
-        }) as any,
-        handler: handler => createProcedureBuilder({
+            errors,
+        } as any),
+        handler: <T>(handler: any) => createProcedureBuilder<Input, Output, ErrorToDataMap<T>>({
             ...definition,
-            handler
-        }),
+            handler,
+        } as any) as any,
     };
 }
 
-export class SeamRouter extends EventEmitter<SeamEvents> {
-    private _procedures: ProcedureList = {};
-    private _router: Router;
+type ErrorToDataMap<T> = {
+    [U in T as U extends { error: ApiError<any, infer E> }
+    ? E
+    : never]: U extends { data: infer D } ? ToZod<D> : undefined;
+};
 
-    constructor(path: string, procedures: ProcedureBuilderList) {
-        super();
-        this._router = Router();
-        for (const proc in procedures) {
-            this._procedures[proc] = procedures[proc]._def;
+type ToZod<T> =
+    T extends string ? z.ZodString :
+    T extends number ? z.ZodNumber :
+    T extends boolean ? z.ZodBoolean :
+    T extends bigint ? z.ZodBigInt :
+    T extends Date ? z.ZodDate :
+    T extends undefined ? z.ZodUndefined :
+    T extends null ? z.ZodNull :
+    T extends any[] ? z.ZodArray<ToZod<T[number]>> :
+    T extends Record<string, any>
+    ? z.ZodObject<{ [K in keyof T]: ToZod<T[K]> }>
+    : z.ZodType;
+
+export type SeamRouterBuilder = Record<string, ProcedureBuilder<any, any, any>>;
+
+function defineSeamRouter(seamSpace: SeamSpace, path: string, seamRouterBuilder: SeamRouterBuilder) {
+    const router = Router();
+
+    router.post("/:procName", async (req: Request, res: Response, next: NextFunction) => {
+        const procedure = seamRouterBuilder[req.params.procName]._def;
+
+        if (!procedure || !procedure.handler)
+            return res.sendStatus(404);
+
+        let input: Record<string, any> | undefined;
+        let validatedInput: Record<string, unknown> | undefined | null = undefined;
+        let output: Result<any, ApiError> | undefined = undefined;
+        let validatedOutput: any;
+
+        // Middleware
+        try {
+            input = await runMiddleware(seamSpace, req, res);
+        } catch (err) {
+            console.error(err);
+            return res.status(415).send(String(err));
         }
-        // seamSpace.app.use(path, this._router);
 
-        this._router.post("/:procName", async (req: Request, res: Response, next: NextFunction) => {
-            const procedure = this._procedures[req.params.procName];
-            if (!procedure || !procedure.handler)
-                return res.sendStatus(404);
-
-            let input: Record<string, any> | undefined;
-            let validatedInput: Record<string, unknown> | undefined | null = undefined;
-            let output: Result<any, ApiError> | undefined = undefined;
-            let validatedOutput: any;
-
-            // Middleware
-            try {
-                input = await this.runMiddleware(req, res);
-            } catch (err) {
-                console.error(err);
-                return res.status(415).send(String(err));
-            }
-
-            // Validate input
-            try {
-                validatedInput = this.validateInput(input, procedure.input);
-            } catch (err) {
-                this.emit("inputValidationError", err, {
-                    routerPath: path,
-                    procedureName: req.params.procName,
-                    input,
-                    validatedInput,
-                    output,
-                    validatedOutput,
-                    request: req,
-                    response: res,
-                    next,
-                });
-                res.sendStatus(400);
-                return;
-            }
-
-            // Call procedure
-            const ctx: SeamContext = {
+        // Validate input
+        try {
+            validatedInput = validateInput(input, procedure.input);
+        } catch (err) {
+            seamSpace.emit("inputValidationError", err, {
+                routerPath: path,
+                procedureName: req.params.procName,
+                input,
+                validatedInput,
+                output,
+                validatedOutput,
                 request: req,
                 response: res,
                 next,
-            };
-
-            function toResError(error: unknown): ResError {
-                if (error instanceof ApiError)
-                    return { isApiError: true, error: error.toJSON() };
-                else
-                    return { isApiError: false };
-            }
-
-            try {
-                output = await procedure.handler({ input: validatedInput!, ctx, error: errorHandler });
-            } catch (error) {
-                this.emit("apiError", error, {
-                    routerPath: path,
-                    procedureName: req.params.procName,
-                    input,
-                    validatedInput,
-                    output,
-                    validatedOutput,
-                    request: req,
-                    response: res,
-                    next: () => { res.status(400).json(toResError(error)); return next(); },
-                });
-                return;
-            }
-
-            if (!output.ok) {
-                this.emit("apiError", output.error, {
-                    routerPath: path,
-                    procedureName: req.params.procName,
-                    input,
-                    validatedInput,
-                    output,
-                    validatedOutput,
-                    request: req,
-                    response: res,
-                    next: () => { res.status(400).json(toResError(output.error)); return next(); },
-                });
-                return;
-            }
-
-            // Validate output
-            try {
-                validatedOutput = this.validateOutput(output, z.object({ ok: z.literal(true), data: procedure.output }).or(z.object({ ok: z.literal(false), error: z.any() })));
-            } catch (err) {
-                this.emit("outputValidationError", err, {
-                    routerPath: path,
-                    procedureName: req.params.procName,
-                    input,
-                    validatedInput,
-                    output,
-                    validatedOutput,
-                    request: req,
-                    response: res,
-                    next,
-                });
-                res.sendStatus(500);
-                return;
-            }
-
-            try {
-                const { json, files, paths } = extractFiles({ result: validatedOutput });
-
-                // Does not include file(s)
-                if (files.length === 0) {
-                    res.json(json);
-                    return;
-                }
-
-                // Includes file(s)
-                const form = new FormData();
-                form.append("json", JSON.stringify(json));
-                form.append("paths", JSON.stringify(paths));
-
-                for (let i = 0; i < files.length; i++) {
-                    const file = files[i];
-                    const buffer = Buffer.from(await file.arrayBuffer());
-                    form.append(`file-${i}`, buffer, {
-                        filename: file.name || `file-${i}`,
-                        contentType: file.type || "application/octet-stream",
-                    });
-                }
-
-                res.writeHead(200, form.getHeaders());
-                form.pipe(res);
-            } catch (error) {
-                this.emit("internalError", error, {
-                    routerPath: path,
-                    procedureName: req.params.procName,
-                    input,
-                    validatedInput,
-                    output,
-                    validatedOutput,
-                    request: req,
-                    response: res,
-                    next: next,
-                });
-                res.sendStatus(500); //.send({ error: String(error) });
-            }
-        });
-    }
-
-    get router() {
-        return this._router;
-    }
-
-    private async runMiddleware(req: Request, res: Response) {
-        const contentType = req.headers["content-type"] || "";
-
-        const runMiddleware = (middleware: RequestHandler) =>
-            new Promise<void>((resolve, reject) =>
-                middleware(req, res, err => (err ? reject(err) : resolve()))
-            );
-
-        if (contentType.startsWith("application/json")) {
-            await runMiddleware(this.seamSpace.jsonParser);
-        } else if (contentType.startsWith("multipart/form-data")) {
-            await runMiddleware(this.seamSpace.fileHandler);
-        } else {
-            throw new Error("Unsupported content type.");
+            });
+            res.sendStatus(400);
+            return;
         }
 
-        if (contentType.startsWith("application/json"))
-            return req.body;
+        // Call procedure
+        const ctx: SeamContext = {
+            request: req,
+            response: res,
+            next,
+        };
 
-        // multipart/form-data (already checked before)
-        let input = JSON.parse(req.body.json);
-        const paths = JSON.parse(req.body.paths);
-        const files = (req.files ?? []).map((file: any, index: number) => ({
-            path: paths[index],
-            file: new File([file.buffer], file.originalname, { type: file.mimetype }),
-        }));
-
-        injectFiles(input, files);
-
-        return input;
-    }
-
-    private validateInput(input?: Record<string, any>, inputSchema?: ProcedureInput) {
-        return this.validateData(input, z.object(inputSchema));
-    }
-
-    private validateOutput(output?: unknown, procOutput?: ProcedureOutput) {
-        return this.validateData(output, procOutput);
-    }
-
-    private validateData<T extends z.ZodType>(data?: unknown, schema?: T) {
-        if (!schema) {
-            if (data)
-                throw new Error("Received data, but no data expected.");
-            return null;
+        function toResError(error: unknown): ResError {
+            if (error instanceof ApiError)
+                return { isApiError: true, error: error.toJSON() };
+            else
+                return { isApiError: false };
         }
 
-        if (!data)
-            throw new Error("No data was received, but data was expected.");
+        try {
+            output = await procedure.handler({ input: validatedInput!, ctx, error: errorHandler });
+        } catch (error) {
+            seamSpace.emit("apiError", error, {
+                routerPath: path,
+                procedureName: req.params.procName,
+                input,
+                validatedInput,
+                output,
+                validatedOutput,
+                request: req,
+                response: res,
+                next: () => { res.status(400).json(toResError(error)); return next(); },
+            });
+            return;
+        }
 
-        return schema.parse(data);
+        if (!output.ok) {
+            seamSpace.emit("apiError", output.error, {
+                routerPath: path,
+                procedureName: req.params.procName,
+                input,
+                validatedInput,
+                output,
+                validatedOutput,
+                request: req,
+                response: res,
+                next: () => { res.status(400).json(toResError(output.error)); return next(); },
+            });
+            return;
+        }
+
+        // Validate output
+        try {
+            validatedOutput = validateOutput(output, z.object({ ok: z.literal(true), data: procedure.output }).or(z.object({ ok: z.literal(false), error: z.any() })));
+        } catch (err) {
+            seamSpace.emit("outputValidationError", err, {
+                routerPath: path,
+                procedureName: req.params.procName,
+                input,
+                validatedInput,
+                output,
+                validatedOutput,
+                request: req,
+                response: res,
+                next,
+            });
+            res.sendStatus(500);
+            return;
+        }
+
+        try {
+            const { json, files, paths } = extractFiles({ result: validatedOutput });
+
+            // Does not include file(s)
+            if (files.length === 0) {
+                res.json(json);
+                return;
+            }
+
+            // Includes file(s)
+            const form = new FormData();
+            form.append("json", JSON.stringify(json));
+            form.append("paths", JSON.stringify(paths));
+
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                const buffer = Buffer.from(await file.arrayBuffer());
+                form.append(`file-${i}`, buffer, {
+                    filename: file.name || `file-${i}`,
+                    contentType: file.type || "application/octet-stream",
+                });
+            }
+
+            res.writeHead(200, form.getHeaders());
+            form.pipe(res);
+        } catch (error) {
+            seamSpace.emit("internalError", error, {
+                routerPath: path,
+                procedureName: req.params.procName,
+                input,
+                validatedInput,
+                output,
+                validatedOutput,
+                request: req,
+                response: res,
+                next: next,
+            });
+            res.sendStatus(500);
+        }
+    });
+
+    seamSpace.app.use(`/${path}`, router);
+}
+
+async function runMiddleware(seamSpace: SeamSpace, req: Request, res: Response) {
+    const contentType = req.headers["content-type"] || "";
+
+    const runMiddleware = (middleware: RequestHandler) =>
+        new Promise<void>((resolve, reject) =>
+            middleware(req, res, err => (err ? reject(err) : resolve()))
+        );
+
+    if (contentType.startsWith("application/json")) {
+        await runMiddleware(seamSpace.jsonParser);
+    } else if (contentType.startsWith("multipart/form-data")) {
+        await runMiddleware(seamSpace.fileHandler);
+    } else {
+        throw new Error("Unsupported content type.");
     }
+
+    if (contentType.startsWith("application/json"))
+        return req.body;
+
+    // multipart/form-data (already checked before)
+    let input = JSON.parse(req.body.json);
+    const paths = JSON.parse(req.body.paths);
+    const files = (req.files ?? []).map((file: any, index: number) => ({
+        path: paths[index],
+        file: new File([file.buffer], file.originalname, { type: file.mimetype }),
+    }));
+
+    injectFiles(input, files);
+
+    return input;
+}
+
+function validateInput(input?: Record<string, any>, inputSchema?: ProcedureInput) {
+    return validateData(input, z.object(inputSchema));
+}
+
+function validateOutput(output?: unknown, procOutput?: ProcedureOutput) {
+    return validateData(output, procOutput);
+}
+
+function validateData<T extends z.ZodType>(data?: unknown, schema?: T) {
+    if (!schema) {
+        if (data)
+            throw new Error("Received data, but no data expected.");
+        return null;
+    }
+
+    if (!data)
+        throw new Error("No data was received, but data was expected.");
+
+    return schema.parse(data);
 }
 
 export class SeamSpace extends EventEmitter<SeamEvents> {
@@ -361,13 +361,36 @@ export class SeamSpace extends EventEmitter<SeamEvents> {
 
     constructor(private _app: Express, private _fileHandler: RequestHandler) { super(); }
 
-    public createRouter(path: string, procedures: ProcedureBuilderList = {}): SeamRouter {
-        const router = new SeamRouter(this, path);
-        router.addProcedures(procedures);
-        return router;
+    public addRouters<T extends Record<string, SeamRouterBuilder>>(routers: T): RouterToClient<T> {
+        Object.entries(routers).forEach(e => defineSeamRouter(this, e[0], e[1]));
+        return {} as RouterToClient<T>;
     }
 
     public get app() { return this._app; }
     public get jsonParser() { return this._jsonParser; }
     public get fileHandler() { return this._fileHandler; }
 }
+
+type InferInput<P> =
+    P extends ProcedureBuilder<infer I, any, any>
+    ? { [K in keyof I]: I[K] extends z.ZodType ? z.infer<I[K]> : never; }
+    : never;
+
+type InferOutput<P> =
+    P extends ProcedureBuilder<any, infer O, any>
+    ? O extends z.ZodType ? z.infer<O> : never
+    : never;
+
+type InferErrors<P> =
+    P extends ProcedureBuilder<any, any, infer E>
+    ? E
+    : never;
+
+type ProcedureToFn<P> =
+    P extends ProcedureBuilder<any, any, any>
+    ? (input: InferInput<P>) => Promise<Result<InferOutput<P>, InferErrors<P>>>
+    : never;
+
+type RouterToClient<T> = {
+    [K in keyof T]: T[K] extends ProcedureBuilder<any, any, any> ? ProcedureToFn<T[K]> : RouterToClient<T[K]>;
+};

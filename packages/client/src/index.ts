@@ -25,19 +25,33 @@ export interface SeamClientOptions {
     }
 }
 
-export class SeamClient {
-    static _instance: SeamClient;
-
+export class SeamClient<ApiType> {
     public options: SeamClientOptions;
+    public readonly api: ApiType;
 
     constructor(public readonly baseUrl: string, options?: SeamClientOptions) {
-        SeamClient._instance = this;
         this.options = {
             middleware: {
                 request: options?.middleware?.request || [],
                 response: options?.middleware?.response || [],
             }
-        }
+        };
+
+        const client = this;
+
+        this.api = new Proxy({}, {
+            get(_target, routerName) {
+                return new Proxy({},
+                    {
+                        get(_subTarget, procName) {
+                            return async (input: any) => {
+                                return callApi(client, String(routerName), String(procName), input);
+                            }
+                        },
+                    }
+                )
+            },
+        }) as ApiType;
     }
 
     preRequest(middleware: SeamRequestMiddleware) {
@@ -63,6 +77,7 @@ export class SeamClientError extends Error {
     constructor(
         readonly type: SeamClientErrorType,
         message: string,
+        readonly url: string,
         readonly request: RequestInit,
         readonly cause: unknown
     ) {
@@ -71,16 +86,11 @@ export class SeamClientError extends Error {
     }
 }
 
-export function createSeamClient(baseUrl: string, options?: SeamClientOptions): SeamClient {
-    return new SeamClient(baseUrl, options);
+export function createSeamClient<ApiType>(baseUrl: string, options?: SeamClientOptions): SeamClient<ApiType> {
+    return new SeamClient<ApiType>(baseUrl, options);
 }
 
-export async function callApi(routerName: string, funcName: string, input?: Record<string, any>): Promise<any> {
-    if (!SeamClient._instance)
-        throw new Error("Seam Client not instantiated.");
-
-    const seamClient = SeamClient._instance;
-
+export async function callApi(seamClient: SeamClient<any>, routerName: string, funcName: string, input?: Record<string, any>): Promise<any> {
     const req = buildRequest(input);
     const url = `${seamClient.baseUrl}/${routerName}/${funcName}`;
 
@@ -100,7 +110,7 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
     try {
         res = await fetch(url, req);
     } catch (err) {
-        throw new SeamClientError("REQUEST_FAILED", "Failed to send request.", req, err);
+        throw new SeamClientError("REQUEST_FAILED", "Failed to send request.", url, req, err);
     }
 
     if (!res.ok) {
@@ -112,9 +122,9 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
                     error: ApiError.fromJSON(resError.error),
                 }
             }
-            throw new SeamClientError("REQUEST_FAILED", `Request failed with status ${res.status} ${res.statusText} and non-api error.`, req, null);
+            throw new SeamClientError("REQUEST_FAILED", `Request failed with status ${res.status} ${res.statusText} and non-api error.`, url, req, null);
         }
-        throw new SeamClientError("REQUEST_FAILED", `Request failed with status ${res.status} ${res.statusText}.`, req, null);
+        throw new SeamClientError("REQUEST_FAILED", `Request failed with status ${res.status} ${res.statusText}.`, url, req, null);
     }
 
     const contentType = res.headers.get("content-type") || "";
@@ -160,8 +170,7 @@ export async function callApi(routerName: string, funcName: string, input?: Reco
         return jsonPart.result;
     }
 
-    throw new SeamClientError("INVALID_CONTENT_TYPE", `Response has invalid content type ${contentType}.`, req, null);
-
+    throw new SeamClientError("INVALID_CONTENT_TYPE", `Response has invalid content type ${contentType}.`, url, req, null);
 }
 
 function buildRequest(input: Record<string, any> = {}): RequestInit {

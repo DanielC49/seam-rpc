@@ -24,10 +24,11 @@ export async function generateClient() {
     const outputFiles: string[] = [];
 
     for (let i = 0; i < sourceFiles.length; i++) {
-        const sourceFile = sourceFiles[i];
-        const path = await generateClientFile({ tsPath: sourceFile, jsPath: compiledFolder, outputPath });
-        const symb = i < sourceFiles.length - 1 ? " ├╴" : " └╴";
-        outputFiles.push(symb + removeRootPath(path));
+        gen(sourceFiles[i], outputPath);
+        // const sourceFile = sourceFiles[i];
+        // const path = await generateClientFile({ tsPath: sourceFile, jsPath: compiledFolder, outputPath });
+        // const symb = i < sourceFiles.length - 1 ? " ├╴" : " └╴";
+        // outputFiles.push(symb + removeRootPath(path));
     }
 
     console.log(
@@ -175,13 +176,46 @@ function convert(schema: z.ZodType): string {
     return printNode(node);
 }
 
+function gen(src: string, outputPath: string) {
+    const options: ts.CompilerOptions = {
+        declaration: true,
+        emitDeclarationOnly: true,
+        outDir: outputPath,
+        target: ts.ScriptTarget.ES2020,
+        module: ts.ModuleKind.NodeNext,
+        strict: true,
+    };
+
+    const host = ts.createCompilerHost(options);
+
+    const file = path.resolve(process.cwd(), src);
+
+    const program = ts.createProgram(
+        [file],
+        options,
+        host
+    );
+
+    console.log(file, outputPath);
+
+    const emitResult = program.emit();
+
+    const diagnostics = ts.getPreEmitDiagnostics(program)
+        .concat(emitResult.diagnostics);
+
+    for (const d of diagnostics) {
+        console.log(
+            ts.flattenDiagnosticMessageText(d.messageText, "\n")
+        );
+    }
+}
+
 export async function generateClientFile({
     tsPath,
     jsPath,
     outputPath,
 }: GenerateOptions) {
     const tsFile = path.resolve(process.cwd(), tsPath);
-
     const tsFileName = path.basename(tsFile).slice(0, -path.extname(tsFile).length);
     const routerName = tsFileName.slice(0, tsFileName.indexOf("."));
     const jsFile = path.resolve(process.cwd(), path.join(jsPath, tsFileName + ".js"));

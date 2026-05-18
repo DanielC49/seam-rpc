@@ -9,20 +9,9 @@ Making requests to the server is as simple as calling a function and SeamRPC sen
 This guide will help you build a simple server and client with users and posts to demonstrate how to use the most essential features of SeamRPC. Check the rest of the documentation for more details and information regarding all of the features SeamRPC has to offer.
 
 ## Server
-Each function/endpoint is called a procedure. It can accept input and can return output. You can group procedures in to different routes. It's recommended to split different routes into different files, all inside the same folder. You can also optionally include JSDoc comments for each procedure. The returned value of an API procedure is sent from the server to the client. If an error is thrown in the API procedure in the server, the function throws an error in the client as well (Seam RPC internally responds with HTTP code 400 which the client interprets as an error).
+Each function/endpoint is called a procedure. It can accept input and can return output. You can group procedures in to different routes.
 
 > **Note:** For consistency reasons between server and client API procedures, Seam RPC requires all API functions to return a Promise.
-
-### Folder structure
-Let's start by defining the following folder structure.
-
-```
-server-app
-  ├─ index.ts
-  └─ api
-     ├─ users.ts
-     └─ posts.ts
-```
 
 ### Define API router procedures
 Implement your API procedures in a TypeScript file.
@@ -30,8 +19,9 @@ Implement your API procedures in a TypeScript file.
 `api/users.ts`
 ```ts
 import { seamProcedure } from "@seam-rpc/server";
-import { readFileSync } from "fs";
 import z from "zod";
+import { ApiError } from "@seam-rpc/core";
+import { Service } from "../../index.js";
 
 export interface User {
     id: string;
@@ -39,53 +29,37 @@ export interface User {
     age: number;
 }
 
-export const outputUser = z.object<User>();
-
 export const users: User[] = [];
 
-/**
- * Creates a new user and returns its ID.
- * @param name The name of the user.
- * @returns ID of the newly created user.
- */
-const createUser = seamProcedure()
-    .input({
-        name: z.string().min(3).max(200),
-        age: z.int().min(1).max(150),
-    })
-    .output(outputUser)
-    .handler(({ input, ctx }) => {
-        console.log("Request path:", ctx.request.originalUrl);
-        console.log(ctx.request.headers);
+export const outputUser = z.object({
+    id: z.string(),
+    name: z.string(),
+    age: z.int(),
+});
 
-        const user = {
-            id: Date.now().toString(),
-            name: input.name,
-            age: input.age,
-        };
+export const usersRouter = {
+    createUser: seamProcedure()
+        .input({
+            name: z.string().min(3).max(200),
+            age: z.int().min(1).max(150),
+        })
+        .output(outputUser)
+        .handler(async ({ input }) => {
+            if (users.find(u => u.name == name)) {
+                return { ok: false, error: new ApiError("user_name_already_exists") };
+            }
 
-        users.push(user);
+            const user = {
+                id: Date.now().toString(),
+                name: name,
+                age: age,
+            };
 
-        return user;
-    });
+            users.push(user);
 
-/**
- * Gets a user by ID.
- * @param id The ID of the user.
- * @returns The user object.
- */
-export const getUser = seamProcedure()
-    .input({ id: z.string() })
-    .output(outputUser.or(z.undefined()))
-    .handler(({ input }) => {
-        const user = users.find(e => e.id == input.id);
-        if (user)
-            return user;
-        else
-            throw new Error("user not found");
-    });
-
-export default { createUser, getUser };
+            return { ok: true, data: user };
+        }),
+};
 ```
 A procedure's input and output can be validated using the zod library.
 > :warning: Make sure you implement proper validation, because without it the client is able to send any kind of data.
@@ -97,14 +71,17 @@ A Seam Space is linked to an Express app and is what you defined routers to. You
 ```ts
 import express from "express";
 import { createSeamSpace } from "@seam-rpc/server";
-
-// Import procedure definitions
-import usersRouter from "./api/users.js";
+import { usersRouter } from "./api/users/procedures.js";
 
 const app = express();
 const seamSpace = await createSeamSpace(app);
 
-seamSpace.createRouter("/users").addProcedures(usersRouter);
+const apiRouters = seamSpace.addRouters({
+    users: usersRouter,
+});
+
+// Export API type to use in client
+export type ApiRoutersType = typeof apiRouters;
 
 // Start express server
 app.listen(3000, () => {
@@ -113,61 +90,30 @@ app.listen(3000, () => {
 ```
 
 ## Client
-The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send HTTP requests to the server. SeamRPC can automatically generate the client schema files. To do this, you run the command `srpc generate`.
+The client needs to have the same schema as your API so you can call the API functions and have autocomplete. Behind the scenes these functions will send HTTP requests to the server. You can generate a declaration file (`.d.ts`) and copy it to the client. For example, you could create an npm script like so:
 
 **Example:**
-`seam-rpc gen-client ./src/api/* ../server-app/src/api`
+```json
+"scripts": {
+    "gc": "tsc && copy .\\dist\\index.d.ts ..\\client-app\\src\\types\\api.d.ts"
+},
+```
 
-```
-client-app
-  ├─ index.ts
-  └─ api
-     ├─ users.ts
-     └─ posts.ts
-```
-The api folder in the client contains the generated API client files, and should not be manually edited.
-
-The generated `api/users.ts` file:
-> Notice that the JSDoc comments are included in the client files.
-```ts
-import { callApi, SeamFile, ISeamFile } from "@seam-rpc/client";
-export interface User {
-    id: string;
-    name: string;
-}
-/**
- * Creates a new user and returns its ID.
- * @param name The name of the user.
- * @returns ID of the newly created user.
- */
-export function createUser(name: string): Promise<string> { return callApi("users", "createUser", [name]); }
-/**
- * Gets a user by ID.
- * @param id The ID of the user.
- * @returns The user object.
- */
-export function getUser(id: string): Promise<User | undefined> { return callApi("users", "getUser", [id]); }
-```
+When you run `npm run gc` it will compily the project and copy the api type from `index.d.ts` to `api.d.ts` in the client.
 
 #### Connect client to server
-To establish the connection from the client to the server, you need to specify which URL to call. This example is using a self-hosted server running on port 3000 so it uses `http://localhost:3000`. Just call `createClient` to create the client and specify the URL.
+To establish the connection from the client to the server, you need to specify which URL to call. This example is using a self-hosted server running on port 3000 so it uses `http://localhost:3000`. Just call `createSeamClient` and pass the API type and url to create a client.
 
 ```ts
-createClient("http://localhost:3000");
-```
+import { createSeamClient } from "@seam-rpc/client";
+import { ApiRoutersType } from "./types/api.js";
 
-### Config file
-In order to generate the client files, you must create a config file. You can create one with `srpc init`. This will create a `seam-rpc.config.json` file at the root of your project. Edit the file according to your project and needs.
-```json
-{
-    "source": "./src/api/*",
-    "compiledFolder": "./dist/api",
-    "outputFolder": "../client/src/api"
-}
+const client = createSeamClient<ApiRoutersType>("http://localhost:3000");
+const api = client.api;
+
+const res = await api.users.createUser({name: "john", age: 25});
+console.log(res);
 ```
-- `source` - Source ".ts" files to generate the client files from. You can use [glob pattern](https://en.wikipedia.org/wiki/Glob_(programming)) to specify the files.
-- `compiledFolder` - The folder where you store your compiled/built ".js" files. SeamRPC requires these to get runtime types.
-- `outputFolder` - The folder where to store the generated client api files.
 
 ## Uploading and downloading files
 Both server and client can send files seamlessly. Just use the SeamFile class for this. You can have a parameter as a file or an array/object containing a file. You can have deeply nested files inside objects.
@@ -195,11 +141,6 @@ export async function updateUser(userId: string, userData: UserData): Promise<vo
     writeFileSync(`../avatars/${userData.avatar.fileName}`, userData.avatar.data);
 }
 ```
-
-## Important notices
-- The generated client files contain all imports from the api implementation file in the backend that import from the current relative folder (`./`). This is the simplest way I have to include imports (at least for now). It may import functions and unused symbols but that shouldn't be too worrying.
-- Don't include backend/server functions inside the server api files.
-- Only exported functions will be included in the client generated files.
 
 ## Supported types
 SeamRPC supports the following types (at least for now):

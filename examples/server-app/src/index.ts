@@ -1,15 +1,16 @@
 import express from "express";
-import { createSeamSpace } from "@seam-rpc/server";
-
-// Import procedure definitions
-import usersRouter from "./api/users/procedures.js";
-// import postsRouter from "./api/posts.js";
+import { createSeamSpace, Result } from "@seam-rpc/server";
+import { usersRouter } from "./api/users/procedures.js";
+import { ApiError } from "@seam-rpc/core";
 
 const app = express();
 const seamSpace = await createSeamSpace(app);
 
-// seamSpace.createRouter("/users", usersRouter);
-// seamSpace.createRouter("/posts", postsRouter);
+const apiRouters = seamSpace.addRouters({
+    users: usersRouter
+});
+
+export type ApiRoutersType = typeof apiRouters;
 
 // Handle errors
 
@@ -34,3 +35,12 @@ seamSpace.on("internalError", (error, context) => {
 app.listen(3000, () => {
     console.log("Listening on port 3000");
 });
+
+export interface Service {
+    [funcName: string]: (...args: any[]) => Promise<Result<unknown, ApiError<ErrorMap>>>;
+}
+
+type ErrorMap = {
+    user_name_already_exists: undefined,
+    invalid_name: undefined,
+};

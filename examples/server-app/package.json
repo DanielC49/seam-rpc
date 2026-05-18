@@ -10,7 +10,7 @@
   ],
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
-    "gc": "seam-rpc gen-client ./src/api/* ../client-app/src/api"
+    "gc": "tsc && copy .\\dist\\index.d.ts ..\\client-app\\src\\types\\api.d.ts"
   },
   "keywords": [],
   "author": "",
