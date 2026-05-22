@@ -1,4 +1,4 @@
-import { extractFiles, injectFiles, ResError, Result, ApiError } from "@seam-rpc/core";
+import { extractFiles, injectFiles, ResError, Result, ApiError, ApiErrorInterface } from "@seam-rpc/core";
 import EventEmitter from "events";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
 import FormData from "form-data";
@@ -43,21 +43,13 @@ export interface SeamEvents {
 
 // Procedures
 
-type ProcedureHandler<Input extends ProcedureInput, Output extends ProcedureOutput, Errors extends ProcedureErrors> =
-    (options: ProcedureOptions<Input, Errors>) => Result<z.infer<Output>, ApiError> | Promise<Result<z.infer<Output>, ApiError>>;
+type ProcedureHandler<Input extends ProcedureInput, Output extends ProcedureOutput> =
+    (options: ProcedureOptions<Input>) => Result<z.infer<Output>, ApiError> | Promise<Result<z.infer<Output>, ApiError>>;
 
-interface ProcedureOptions<Input extends ProcedureInput, Errors extends ProcedureErrors> {
+interface ProcedureOptions<Input extends ProcedureInput> {
     input: Simplify<ProcedureInputData<Input>>;
     ctx: SeamContext;
-    error: RpcErrorFactory<Errors>;
 }
-
-type RpcErrorFactory<Errors extends ProcedureErrors> = <Code extends keyof Errors>(
-    code: Code,
-    ...args: z.infer<Errors[Code]> extends undefined
-        ? []
-        : [data: z.infer<Errors[Code]>]
-) => void;
 
 type ProcedureInput = Record<string, z.ZodType>;
 type ProcedureOutput = z.ZodType;
@@ -67,24 +59,38 @@ type ProcedureInputData<T extends ProcedureInput> = {
     [K in keyof T]: z.infer<T[K]>;
 };
 
-interface SeamProcedure<Input extends ProcedureInput = {}, Output extends ProcedureOutput = z.ZodUndefined, Errors extends ProcedureErrors = {}> {
+interface SeamProcedure<
+    Input extends ProcedureInput = {},
+    Output extends ProcedureOutput = z.ZodUndefined,
+    Errors extends ProcedureErrors = {}
+> {
     input?: Input;
     output?: Output;
     errors?: Errors;
-    handler?: ProcedureHandler<Input, Output, Errors>;
+    handler?: ProcedureHandler<Input, Output>;
+}
+
+type ExtractResultError<T> =
+    Awaited<T> extends Result<any, infer E>
+    ? E
+    : never;
+
+type ErrorUnionToMap<E> = {
+    [K in E extends ApiErrorInterface<any, infer Code>
+    ? Code
+    : never]:
+    Extract<E, ApiErrorInterface<any, K>> extends ApiErrorInterface<infer Map, K>
+    ? Map[K]
+    : never;
 }
 
 export type ProcedureBuilder<Input extends ProcedureInput = {}, Output extends ProcedureOutput = z.ZodUndefined, Errors extends ProcedureErrors = {}> = {
     _def: SeamProcedure<Input, Output, Errors>;
     input: <T extends ProcedureInput>(schema: T) => ProcedureBuilder<T, Output, Errors>;
     output: <T extends ProcedureOutput>(schema: T) => ProcedureBuilder<Input, T, Errors>;
-    errors: <T extends ProcedureErrors>(errors: T) => ProcedureBuilder<Input, Output, T>;
-    handler: <T extends Result<Output, any>> (handler: ProcedureHandler<Input, Output, T extends Result<Output, infer E> ? E : {}>) =>
-        ProcedureBuilder<Input, Output, T extends Result<Output, infer E> ? E : {}>;
-};
-
-const errorHandler: RpcErrorFactory<ProcedureErrors> = (code, ...args) => {
-    return new ApiError(code, args[0]);
+    handler: <H extends ProcedureHandler<Input, Output>>
+        (handler: H) =>
+        ProcedureBuilder<Input, Output, ErrorUnionToMap<ExtractResultError<ReturnType<H>>>>
 };
 
 export async function createSeamSpace(app: Express, fileHandler?: RequestHandler): Promise<SeamSpace> {
@@ -120,10 +126,6 @@ function createProcedureBuilder<Input extends ProcedureInput = {}, Output extend
         output: schema => createProcedureBuilder<Input, typeof schema, Errors>({
             ...definition,
             output: schema,
-        } as any),
-        errors: errors => createProcedureBuilder<Input, Output, typeof errors>({
-            ...definition,
-            errors,
         } as any),
         handler: <T>(handler: any) => createProcedureBuilder<Input, Output, ErrorToDataMap<T>>({
             ...definition,
@@ -209,7 +211,7 @@ function defineSeamRouter(seamSpace: SeamSpace, path: string, seamRouterBuilder:
         }
 
         try {
-            output = await procedure.handler({ input: validatedInput!, ctx, error: errorHandler });
+            output = await procedure.handler({ input: validatedInput!, ctx });
         } catch (error) {
             seamSpace.emit("apiError", error, {
                 routerPath: path,
@@ -371,26 +373,63 @@ export class SeamSpace extends EventEmitter<SeamEvents> {
     public get fileHandler() { return this._fileHandler; }
 }
 
+type ErrorMapToUnion<
+  E extends Record<string, any>
+> = {
+  [K in keyof E]:
+    ApiError<{ [P in K]: E[K] }, K>
+}[keyof E];
+
+type ResultFromErrors<
+  Data,
+  Errors extends Record<string, any>
+> =
+  | { ok: true; data: Data }
+  | (
+      ErrorMapToUnion<Errors> extends infer E
+        ? E extends ApiError<any, any>
+          ? { ok: false; error: E }
+          : never
+        : never
+    );
+
 type InferInput<P> =
-    P extends ProcedureBuilder<infer I, any, any>
-    ? { [K in keyof I]: I[K] extends z.ZodType ? z.infer<I[K]> : never; }
+  P extends ProcedureBuilder<infer I, any, any>
+    ? {
+        [K in keyof I]:
+          I[K] extends z.ZodType
+            ? z.infer<I[K]>
+            : never;
+      }
     : never;
 
 type InferOutput<P> =
-    P extends ProcedureBuilder<any, infer O, any>
-    ? O extends z.ZodType ? z.infer<O> : never
+  P extends ProcedureBuilder<any, infer O, any>
+    ? O extends z.ZodType
+      ? z.infer<O>
+      : never
     : never;
 
 type InferErrors<P> =
-    P extends ProcedureBuilder<any, any, infer E>
+  P extends ProcedureBuilder<any, any, infer E>
     ? E
     : never;
 
 type ProcedureToFn<P> =
-    P extends ProcedureBuilder<any, any, any>
-    ? (input: InferInput<P>) => Promise<Result<InferOutput<P>, InferErrors<P>>>
+  P extends ProcedureBuilder<any, any, any>
+    ? (
+        input: InferInput<P>
+      ) => Promise<
+        ResultFromErrors<
+          InferOutput<P>,
+          InferErrors<P>
+        >
+      >
     : never;
 
 type RouterToClient<T> = {
-    [K in keyof T]: T[K] extends ProcedureBuilder<any, any, any> ? ProcedureToFn<T[K]> : RouterToClient<T[K]>;
+  [K in keyof T]:
+    T[K] extends ProcedureBuilder<any, any, any>
+      ? ProcedureToFn<T[K]>
+      : RouterToClient<T[K]>;
 };
