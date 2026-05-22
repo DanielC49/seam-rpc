@@ -1,4 +1,4 @@
-import { ApiError } from "@seam-rpc/core";
+import { ApiError } from "@seam-rpc/server";
 import { Service } from "../../index.js";
 
 export interface User {

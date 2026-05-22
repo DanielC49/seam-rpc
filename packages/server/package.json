@@ -3,9 +3,6 @@
   "version": "5.0.0",
   "main": "dist/index.js",
   "type": "module",
-  "bin": {
-    "srpc": "dist/bin/index.js"
-  },
   "types": "dist/index.d.ts",
   "files": [
     "dist"

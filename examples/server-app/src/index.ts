@@ -1,7 +1,6 @@
 import express from "express";
-import { createSeamSpace, Result } from "@seam-rpc/server";
+import { createSeamSpace, Result, ApiError } from "@seam-rpc/server";
 import { usersRouter } from "./api/users/procedures.js";
-import { ApiError } from "@seam-rpc/core";
 
 const app = express();
 const seamSpace = await createSeamSpace(app);

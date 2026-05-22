@@ -4,7 +4,7 @@ import express, { Express, NextFunction, Request, RequestHandler, Response, Rout
 import FormData from "form-data";
 import * as z from "zod";
 
-export { ApiError as RpcError };
+export { ApiError };
 export type { Result };
 
 type Simplify<T> =

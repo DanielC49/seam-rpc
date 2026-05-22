@@ -1,6 +1,6 @@
 import { extractFiles, injectFiles, ResError, ApiError, type Result } from "@seam-rpc/core";
 
-export { ApiError as RpcError };
+export { ApiError };
 export type { Result };
 
 export type SeamRequestMiddleware = (context: SeamRequestMiddlewareContext) => void | Promise<void>;
