@@ -1,6 +1,6 @@
 {
   "name": "@seam-rpc/core",
-  "version": "4.3.22",
+  "version": "5.0.0",
   "description": "",
   "main": "./dist/index.js",
   "type": "module",
