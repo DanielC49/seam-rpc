@@ -15,7 +15,6 @@ export const usersRouter = {
         }),
 };
 
-
 // const usersRouter = seamRouter("users", { createUser });
 
 // /**

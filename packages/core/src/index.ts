@@ -1,40 +1,33 @@
-export type Result<Data, Error extends ApiError> =
-    | { ok: true; data: Data }
-    | { ok: false; error: Error };
+export type Result<Data, Error extends ApiError<any, any> | undefined = undefined> =
+    Error extends undefined ? | { ok: true; data: Data }
+    : { ok: true; data: Data } | { ok: false; error: Error };
 
 export type ResError = {
     isApiError: false;
 } | {
     isApiError: true;
-    error: ApiErrorInterface;
+    error: ApiErrorInterface<any>;
 };
 
-export interface ApiErrorInterface<ErrorMap extends Record<Code, any> = any, Code extends keyof ErrorMap = keyof ErrorMap> {
-    code: Code;
-    data: ErrorMap[Code];
-}
-
-export class ApiError<ErrorMap extends Record<Code, any> = any, Code extends keyof ErrorMap = keyof ErrorMap> implements ApiErrorInterface {
-    private _code: Code;
-    private _data?: ErrorMap[Code];
-
-    constructor(code: Code, data?: ErrorMap[Code]) {
-        this._code = code;
-        this._data = data;
+export type ApiErrorInterface<ErrorMap extends Record<string, any>> = {
+    [K in keyof ErrorMap]: {
+        code: K;
+        data?: ErrorMap[K];
     }
+}[keyof ErrorMap];
 
-    public get code() { return this._code; }
-    public get data() { return this._data; }
+export class ApiError<ErrorMap extends Record<string, any>, Code extends keyof ErrorMap> {
+    constructor(public readonly code: Code, public readonly data?: ErrorMap[Code]) { }
 
     public toString() {
-        return this._code.toString() + (this._data !== undefined ? ": " + JSON.stringify(this._data) : "");
+        return this.code.toString() + (this.data !== undefined ? ": " + JSON.stringify(this.data) : "");
     }
 
     public toJSON() {
-        return { code: this._code, data: this._data };
+        return { code: this.code, data: this.data };
     }
 
-    public static fromJSON(json: { code: any, data: any }) {
+    public static fromJSON(json: { code: any, data?: any }) {
         return new ApiError(json.code, json.data);
     }
 }

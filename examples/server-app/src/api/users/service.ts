@@ -12,7 +12,7 @@ export const users: User[] = [];
 export const userService = {
     async createUser(name: string, age: number) {
         if (users.find(u => u.name == name)) {
-            return { ok: false, error: new ApiError("user_name_already_exists") };
+            return { ok: false, error: new ApiError("user_name_already_exists", {name: "abc"}) };
         }
 
         if (name == "test") {

@@ -36,10 +36,11 @@ app.listen(3000, () => {
 });
 
 export interface Service {
-    [funcName: string]: (...args: any[]) => Promise<Result<unknown, ApiError<ErrorMap>>>;
+    [funcName: string]: (...args: any[]) => Promise<Result<unknown, ApiError<ErrorMap, keyof ErrorMap>>>;
 }
 
 type ErrorMap = {
-    user_name_already_exists: undefined,
-    invalid_name: undefined,
+    user_name_already_exists: { name: string },
+    invalid_name: { reason: string },
+    another_error: undefined,
 };

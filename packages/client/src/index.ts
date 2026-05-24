@@ -63,12 +63,6 @@ export class SeamClient<ApiType> {
     }
 }
 
-export class SeamError extends ApiError {
-    constructor(code: string) {
-        super(code, undefined);
-    }
-}
-
 type SeamClientErrorType =
     | "REQUEST_FAILED"
     | "INVALID_CONTENT_TYPE";
