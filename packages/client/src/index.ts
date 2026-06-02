@@ -5,6 +5,7 @@ export type { Result };
 
 export type SeamRequestMiddleware = (context: SeamRequestMiddlewareContext) => void | Promise<void>;
 export type SeamResponseMiddleware = (context: SeamResponseMiddlewareContext) => void | Promise<void>;
+export type SeamOnErrorHandler = (error: SeamClientError) => void | Promise<void>;
 
 export interface SeamRequestMiddlewareContext {
     request: RequestInit;
@@ -22,7 +23,8 @@ export interface SeamClientOptions {
     middleware?: {
         request?: SeamRequestMiddleware[];
         response?: SeamResponseMiddleware[];
-    }
+    };
+    onError?: SeamOnErrorHandler[];
 }
 
 export class SeamClient<ApiType> {
@@ -34,7 +36,8 @@ export class SeamClient<ApiType> {
             middleware: {
                 request: options?.middleware?.request || [],
                 response: options?.middleware?.response || [],
-            }
+            },
+            onError: options?.onError || [],
         };
 
         const client = this;
@@ -45,7 +48,14 @@ export class SeamClient<ApiType> {
                     {
                         get(_subTarget, procName) {
                             return async (input: any) => {
-                                return callApi(client, String(routerName), String(procName), input);
+                                try {
+                                    return callApi(client, String(routerName), String(procName), input);
+                                } catch (err) {
+                                    if (!client.options.onError || !(err instanceof SeamClientError)) throw err;
+                                    for (const handler of client.options?.onError) {
+                                        handler(err);
+                                    }
+                                }
                             }
                         },
                     }
@@ -60,6 +70,10 @@ export class SeamClient<ApiType> {
 
     postRequest(middleware: SeamResponseMiddleware) {
         this.options?.middleware?.response?.push(middleware);
+    }
+
+    onError(handler: SeamOnErrorHandler) {
+        this.options.onError?.push(handler);
     }
 }
 
