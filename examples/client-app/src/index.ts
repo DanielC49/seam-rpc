@@ -25,7 +25,7 @@ const res = await api.users.createUser({ name: "john", age: 25 });
 if (res.ok) {
     console.log(res.data);
 } else {
-    // console.log(res.error.code == "user_name_already_exists" && res.error.data?.name);
+    console.log(res.error.code == "user_name_already_exists" && res.error.data?.name);
 }
 
 // async function test() {

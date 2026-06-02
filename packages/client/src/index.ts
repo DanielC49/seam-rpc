@@ -55,7 +55,7 @@ export class SeamClient<ApiType> {
                                     for (const handler of client.options?.onError) {
                                         handler(err);
                                     }
-                                    return { ok: false, error: null };
+                                    return { ok: false, error: new ApiError("") };
                                 }
                             }
                         },
