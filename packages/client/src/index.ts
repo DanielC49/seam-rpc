@@ -49,12 +49,13 @@ export class SeamClient<ApiType> {
                         get(_subTarget, procName) {
                             return async (input: any) => {
                                 try {
-                                    return callApi(client, String(routerName), String(procName), input);
+                                    return await callApi(client, String(routerName), String(procName), input)
                                 } catch (err) {
                                     if (!client.options.onError || !(err instanceof SeamClientError)) throw err;
                                     for (const handler of client.options?.onError) {
                                         handler(err);
                                     }
+                                    return { ok: false, error: null };
                                 }
                             }
                         },

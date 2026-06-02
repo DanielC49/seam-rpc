@@ -4,13 +4,6 @@ import { ApiRoutersType } from "./types/api.js";
 const client = createSeamClient<ApiRoutersType>("http://localhost:3000");
 const api = client.api;
 
-const res = await api.users.createUser({ name: "john", age: 25 });
-if (res.ok) {
-    console.log(res.data);
-} else {
-    console.log(res.error.code == "user_name_already_exists" && res.error.data?.name);
-}
-
 client.preRequest(ctx => {
     // Add a custom header before sending the request
     ctx.request.headers = {
@@ -23,6 +16,17 @@ client.postRequest(ctx => {
     // Get value of a custom header from server response
     console.log(ctx.response.headers.get("X-SomeHeader"));
 });
+
+client.onError(error => {
+    console.log("error", error);
+});
+
+const res = await api.users.createUser({ name: "john", age: 25 });
+if (res.ok) {
+    console.log(res.data);
+} else {
+    // console.log(res.error.code == "user_name_already_exists" && res.error.data?.name);
+}
 
 // async function test() {
 //     try {
