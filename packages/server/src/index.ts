@@ -246,7 +246,7 @@ function defineSeamRouter(seamSpace: SeamSpace, path: string, seamRouterBuilder:
 
         // Validate output
         try {
-            validatedOutput = validateOutput(output, z.object({ ok: z.literal(true), data: procedure.output }).or(z.object({ ok: z.literal(false), error: z.any() })));
+            validatedOutput = validateOutput(output, z.object({ ok: z.literal(true), data: procedure.output ?? z.undefined() }).or(z.object({ ok: z.literal(false), error: z.any() })));
         } catch (err) {
             seamSpace.emit("outputValidationError", err, {
                 routerPath: path,
