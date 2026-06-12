@@ -161,7 +161,12 @@ function defineSeamRouter(seamSpace: SeamSpace, path: string, seamRouterBuilder:
     const router = Router();
 
     router.post("/:procName", async (req: Request, res: Response, next: NextFunction) => {
-        const procedure = seamRouterBuilder[req.params.procName]._def;
+        const procedureBuilder = seamRouterBuilder[req.params.procName];
+
+        if (!procedureBuilder)
+            return res.sendStatus(404);
+
+        const procedure = procedureBuilder._def;
 
         if (!procedure || !procedure.handler)
             return res.sendStatus(404);
