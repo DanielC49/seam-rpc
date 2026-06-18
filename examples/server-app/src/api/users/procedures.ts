@@ -8,10 +8,11 @@ export const usersRouter = {
         .input({
             name: z.string().min(3).max(200),
             age: z.int().min(1).max(150),
+            createdAt: z.date(),
         })
         .output(outputUser)
         .handler(async ({ input }) => {
-            return await userService.createUser(input.name, input.age);
+            return await userService.createUser(input.name, input.age, input.createdAt);
         }),
 };
 

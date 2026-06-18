@@ -1,4 +1,4 @@
-import { extractFiles, injectFiles, ResError, ApiError, type Result } from "@seam-rpc/core";
+import { extractFiles, injectFiles, extractDates, injectDates, ResError, ApiError, type Result } from "@seam-rpc/core";
 
 export { ApiError };
 export type { Result };
@@ -147,6 +147,8 @@ export async function callApi(seamClient: SeamClient<any>, routerName: string, f
         const formData = await res.formData();
         const jsonPart = JSON.parse(formData.get("json")?.toString() || "[]");
         const pathsPart: (string | number)[][] = JSON.parse(formData.get("paths")?.toString() || "[]");
+        const datePathsPart: (string | number)[][] = JSON.parse(formData.get("datePaths")?.toString() || "[]");
+        const datesPart: string[] = JSON.parse(formData.get("dates")?.toString() || "[]");
 
         const responseFiles: { path: (string | number)[]; file: File }[] = [];
 
@@ -162,6 +164,12 @@ export async function callApi(seamClient: SeamClient<any>, routerName: string, f
         }
 
         injectFiles(jsonPart, responseFiles);
+
+        const responseDates = datesPart.map((dateString, index) => ({
+            path: datePathsPart[index],
+            dateString,
+        }));
+        injectDates(jsonPart, responseDates);
 
         if (seamClient.options?.middleware?.response) {
             for (const mw of seamClient.options.middleware.response) {
@@ -185,13 +193,16 @@ export async function callApi(seamClient: SeamClient<any>, routerName: string, f
 function buildRequest(input: Record<string, any> = {}): RequestInit {
     let req: RequestInit;
 
-    const { json, files, paths } = extractFiles(input);
+    const { json: jsonAfterFiles, files, paths } = extractFiles(input);
+    const { json, dates, paths: datePaths } = extractDates(jsonAfterFiles);
 
-    if (files.length > 0) {
+    if (files.length > 0 || dates.length > 0) {
         const formData = new FormData();
 
         formData.append("json", JSON.stringify(json));
         formData.append("paths", JSON.stringify(paths));
+        formData.append("datePaths", JSON.stringify(datePaths));
+        formData.append("dates", JSON.stringify(dates));
 
         for (let i = 0; i < files.length; i++) {
             const file = files[i];

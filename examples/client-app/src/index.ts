@@ -21,7 +21,7 @@ client.onError(error => {
     console.log("error", error);
 });
 
-const res = await api.users.createUser({ name: "john", age: 25 });
+const res = await api.users.createUser({ name: "john", age: 25, createdAt: new Date() });
 if (res.ok) {
     console.log(res.data);
 } else {

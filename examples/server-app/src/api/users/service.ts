@@ -5,14 +5,15 @@ export interface User {
     id: string;
     name: string;
     age: number;
+    createdAt: Date;
 }
 
 export const users: User[] = [];
 
 export const userService = {
-    async createUser(name: string, age: number) {
+    async createUser(name: string, age: number, createdAt: Date) {
         if (users.find(u => u.name == name)) {
-            return { ok: false, error: new ApiError("user_name_already_exists", {name: "abc"}) };
+            return { ok: false, error: new ApiError("user_name_already_exists", { name: "abc" }) };
         }
 
         if (name == "test") {
@@ -21,8 +22,9 @@ export const userService = {
 
         const user = {
             id: Date.now().toString(),
-            name: name,
-            age: age,
+            name,
+            age,
+            createdAt,
         };
 
         users.push(user);

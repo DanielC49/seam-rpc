@@ -1,4 +1,4 @@
-import { extractFiles, injectFiles, ResError, Result, ApiError, ApiErrorInterface } from "@seam-rpc/core";
+import { extractFiles, injectFiles, extractDates, injectDates, ResError, Result, ApiError, ApiErrorInterface } from "@seam-rpc/core";
 import EventEmitter from "events";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
 import FormData from "form-data";
@@ -47,7 +47,7 @@ type ProcedureHandler<Input extends ProcedureInput, Output extends ProcedureOutp
     (options: ProcedureOptions<Input>) => Result<z.infer<Output>, ApiError<any, any>> | Promise<Result<z.infer<Output>, ApiError<any, any>>>;
 
 interface ProcedureOptions<Input extends ProcedureInput> {
-    input: Simplify<ProcedureInputData<Input>>;
+    input: ProcedureInputData<Input>;
     ctx: SeamContext;
 }
 
@@ -269,18 +269,21 @@ function defineSeamRouter(seamSpace: SeamSpace, path: string, seamRouterBuilder:
         }
 
         try {
-            const { json, files, paths } = extractFiles({ result: validatedOutput });
+            const { json: jsonAfterFiles, files, paths } = extractFiles({ result: validatedOutput });
+            const { json, dates, paths: datePaths } = extractDates(jsonAfterFiles);
 
-            // Does not include file(s)
-            if (files.length === 0) {
+            // Does not include file(s) or date(s)
+            if (files.length === 0 && dates.length === 0) {
                 res.json(json);
                 return;
             }
 
-            // Includes file(s)
+            // Includes file(s) or date(s)
             const form = new FormData();
             form.append("json", JSON.stringify(json));
             form.append("paths", JSON.stringify(paths));
+            form.append("datePaths", JSON.stringify(datePaths));
+            form.append("dates", JSON.stringify(dates));
 
             for (let i = 0; i < files.length; i++) {
                 const file = files[i];
@@ -334,12 +337,21 @@ async function runMiddleware(seamSpace: SeamSpace, req: Request, res: Response) 
     // multipart/form-data (already checked before)
     let input = JSON.parse(req.body.json);
     const paths = JSON.parse(req.body.paths);
+    const datePaths: (string | number)[][] = JSON.parse(req.body.datePaths || "[]");
+    const dates: string[] = JSON.parse(req.body.dates || "[]");
+
     const files = (req.files ?? []).map((file: any, index: number) => ({
         path: paths[index],
         file: new File([file.buffer], file.originalname, { type: file.mimetype }),
     }));
 
     injectFiles(input, files);
+
+    const dateEntries = dates.map((dateString, index) => ({
+        path: datePaths[index],
+        dateString,
+    }));
+    injectDates(input, dateEntries);
 
     return input;
 }

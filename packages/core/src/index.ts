@@ -43,6 +43,11 @@ export function extractFiles(input: unknown) {
             return null;
         }
 
+        // Keep Date objects intact so date extraction can process them later.
+        if (value instanceof Date) {
+            return value;
+        }
+
         if (Array.isArray(value)) {
             return value.map((e, index) => walk(e, [...path, index]));
         }
@@ -71,6 +76,55 @@ export function injectFiles(json: any, files: { path: (string | number)[], file:
                 json = json[key];
             else
                 json[key] = file.file;
+        }
+    }
+}
+
+export function extractDates(input: unknown) {
+    const dates: string[] = [];
+    const paths: (string | number)[][] = [];
+
+    function walk(value: unknown, path: (string | number)[]): any {
+        if (value instanceof Date) {
+            dates.push(value.toISOString());
+            paths.push(path);
+            return value.toISOString();
+        }
+
+        // Keep File objects intact so file extraction can process them later.
+        if (value instanceof File) {
+            return value;
+        }
+
+        if (Array.isArray(value)) {
+            return value.map((e, index) => walk(e, [...path, index]));
+        }
+
+        if (value && typeof value === "object") {
+            return Object.fromEntries(
+                Object.entries(value).map(([k, v]) => [k, walk(v, [...path, k])])
+            );
+        }
+
+        return value;
+    }
+
+    return {
+        json: walk(input, []),
+        dates,
+        paths,
+    };
+}
+
+export function injectDates(json: any, dates: { path: (string | number)[], dateString: string }[]) {
+    for (const dateEntry of dates) {
+        let current = json;
+        for (let i = 0; i < dateEntry.path.length; i++) {
+            const key = dateEntry.path[i];
+            if (i < dateEntry.path.length - 1)
+                current = current[key];
+            else
+                current[key] = new Date(dateEntry.dateString);
         }
     }
 }

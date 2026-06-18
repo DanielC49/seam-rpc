@@ -4,10 +4,12 @@ declare const apiRouters: import("@seam-rpc/server").RouterToClient<{
         createUser: import("@seam-rpc/server").ProcedureBuilder<{
             name: import("zod").ZodString;
             age: import("zod").ZodInt;
+            createdAt: import("zod").ZodDate;
         }, import("zod").ZodObject<{
             id: import("zod").ZodString;
             name: import("zod").ZodString;
             age: import("zod").ZodInt;
+            createdAt: import("zod").ZodDate;
         }, import("zod/v4/core").$strip>, {
             user_name_already_exists: {
                 name: string;
