@@ -1,7 +1,7 @@
-import { extractFiles, injectFiles, extractDates, injectDates, ResError, ApiError, type Result } from "@seam-rpc/core";
+import { extractFiles, injectFiles, extractDates, injectDates, ResError, ApiError, type Result, Ok, Err } from "@seam-rpc/core";
 
 export { ApiError };
-export type { Result };
+export type { Result, Ok, Err };
 
 export type SeamRequestMiddleware = (context: SeamRequestMiddlewareContext) => void | Promise<void>;
 export type SeamResponseMiddleware = (context: SeamResponseMiddlewareContext) => void | Promise<void>;

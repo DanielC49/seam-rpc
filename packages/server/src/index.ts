@@ -1,11 +1,11 @@
-import { extractFiles, injectFiles, extractDates, injectDates, ResError, Result, ApiError, ApiErrorInterface } from "@seam-rpc/core";
+import { extractFiles, injectFiles, extractDates, injectDates, ResError, Result, Ok, Err, ApiError } from "@seam-rpc/core";
 import EventEmitter from "events";
 import express, { Express, NextFunction, Request, RequestHandler, Response, Router } from "express";
 import FormData from "form-data";
 import * as z from "zod";
 
 export { ApiError };
-export type { Result };
+export type { Result, Ok, Err };
 
 type Simplify<T> =
     T extends File
