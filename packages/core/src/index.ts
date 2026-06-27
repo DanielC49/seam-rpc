@@ -1,6 +1,16 @@
-export type Result<Data, Error extends ApiError<any, any> | undefined = undefined> =
-    Error extends undefined ? | { ok: true; data: Data }
-    : { ok: true; data: Data } | { ok: false; error: Error };
+export type Ok<T> = {
+    ok: true;
+    data: T;
+};
+
+export type Err<E extends ApiError<any, any> = ApiError<any, any>> = {
+    ok: false;
+    error: E;
+};
+
+export type Result<T, E extends ApiError<any, any> = never> =
+    | Ok<T>
+    | Err<E>;
 
 export type ResError = {
     isApiError: false;

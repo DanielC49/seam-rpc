@@ -71,7 +71,7 @@ interface SeamProcedure<
 }
 
 type ExtractResultError<T> =
-    Awaited<T> extends Result<any, undefined>
+    Awaited<T> extends Result<any, never>
     ? never
     : Awaited<T> extends Result<any, infer E>
     ? E
