@@ -1,7 +1,7 @@
 import { createSeamClient } from "@seam-rpc/client";
 import { ApiRoutersType } from "./types/api.js";
 
-const client = createSeamClient<ApiRoutersType>("http://localhost:3000");
+const client = createSeamClient<ApiRoutersType>("http://localhost:3002");
 const api = client.api;
 
 client.preRequest(ctx => {

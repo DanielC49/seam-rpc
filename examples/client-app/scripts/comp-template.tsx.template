@@ -1,0 +1,8 @@
+import "./{COMP_NAME}.css";
+
+interface {COMP_NAME}Props {
+}
+
+export default function {COMP_NAME} ({}: {COMP_NAME}Props)  {
+    return "";
+}

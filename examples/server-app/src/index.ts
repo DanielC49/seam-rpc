@@ -4,6 +4,7 @@ import { usersRouter } from "./api/users/procedures.js";
 
 const app = express();
 const seamSpace = await createSeamSpace(app);
+const PORT = 3002;
 
 const apiRouters = seamSpace.addRouters({
     users: usersRouter
@@ -29,10 +30,9 @@ seamSpace.on("internalError", (error, context) => {
     console.error(`Internal Error at ${context.procedureName}\n`, error);
 });
 
-
 // Start express server
-app.listen(3000, () => {
-    console.log("Listening on port 3000");
+app.listen(PORT, () => {
+    console.log("Listening on port " + PORT);
 });
 
 export interface Service {
