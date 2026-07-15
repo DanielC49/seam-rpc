@@ -1,7 +1,7 @@
-import { extractFiles, injectFiles, extractDates, injectDates, ResError, ApiError, type Result } from "@seam-rpc/core";
+import { extractFiles, injectFiles, extractDates, injectDates, ResError, ApiError, type Result, Ok, Err } from "@seam-rpc/core";
 
 export { ApiError };
-export type { Result };
+export type { Result, Ok, Err };
 
 export type SeamRequestMiddleware = (context: SeamRequestMiddlewareContext) => void | Promise<void>;
 export type SeamResponseMiddleware = (context: SeamResponseMiddlewareContext) => void | Promise<void>;
@@ -19,7 +19,7 @@ export type SeamResponseMiddlewareContext = SeamRequestMiddlewareContext & {
     parsedResponse: any;
 }
 
-export interface SeamClientOptions {
+export interface SeamClientOptionsConstructor {
     middleware?: {
         request?: SeamRequestMiddleware[];
         response?: SeamResponseMiddleware[];
@@ -27,11 +27,19 @@ export interface SeamClientOptions {
     onError?: SeamOnErrorHandler[];
 }
 
+export interface SeamClientOptions {
+    middleware: {
+        request: SeamRequestMiddleware[];
+        response: SeamResponseMiddleware[];
+    };
+    onError: SeamOnErrorHandler[];
+}
+
 export class SeamClient<ApiType> {
     public options: SeamClientOptions;
     public readonly api: ApiType;
 
-    constructor(public readonly baseUrl: string, options?: SeamClientOptions) {
+    constructor(public readonly baseUrl: string, options?: SeamClientOptionsConstructor) {
         this.options = {
             middleware: {
                 request: options?.middleware?.request || [],
@@ -48,12 +56,16 @@ export class SeamClient<ApiType> {
                     {
                         get(_subTarget, procName) {
                             return async (input: any, requestOptions?: RequestInit) => {
+                                const url = `${client.baseUrl}/${String(routerName)}/${String(procName)}`;
                                 try {
-                                    return await callApi(client, String(routerName), String(procName), input, requestOptions)
+                                    return await callApi(client, url, String(routerName), String(procName), input, requestOptions);
                                 } catch (err) {
-                                    if (!client.options.onError || !(err instanceof SeamClientError)) throw err;
+                                    const error = err instanceof SeamClientError
+                                        ? err
+                                        : new SeamClientError("UNEXPECTED", "Unexpected error when calling API procedure.", url, null, err);
+                                    if (client.options.onError.length == 0) throw error;
                                     for (const handler of client.options?.onError) {
-                                        handler(err);
+                                        handler(error);
                                     }
                                     return { ok: false, error: new ApiError("") };
                                 }
@@ -80,15 +92,17 @@ export class SeamClient<ApiType> {
 
 type SeamClientErrorType =
     | "REQUEST_FAILED"
-    | "INVALID_CONTENT_TYPE";
+    | "INVALID_CONTENT_TYPE"
+    | "UNEXPECTED"
+    ;
 
 export class SeamClientError extends Error {
     constructor(
         readonly type: SeamClientErrorType,
         message: string,
         readonly url: string,
-        readonly request: RequestInit,
-        readonly cause: unknown
+        readonly request: RequestInit | null,
+        readonly cause: unknown,
     ) {
         super(message);
         this.name = "SeamClientError";
@@ -99,9 +113,8 @@ export function createSeamClient<ApiType>(baseUrl: string, options?: SeamClientO
     return new SeamClient<ApiType>(baseUrl, options);
 }
 
-export async function callApi(seamClient: SeamClient<any>, routerName: string, funcName: string, input?: Record<string, any>, requestOptions?: RequestInit): Promise<any> {
+export async function callApi(seamClient: SeamClient<any>, url: string, routerName: string, funcName: string, input?: Record<string, any>, requestOptions?: RequestInit): Promise<any> {
     const req = buildRequest(input, requestOptions ?? {});
-    const url = `${seamClient.baseUrl}/${routerName}/${funcName}`;
 
     if (seamClient.options?.middleware?.request) {
         for (const mw of seamClient.options.middleware.request) {
