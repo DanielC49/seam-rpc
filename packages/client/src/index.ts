@@ -47,9 +47,9 @@ export class SeamClient<ApiType> {
                 return new Proxy({},
                     {
                         get(_subTarget, procName) {
-                            return async (input: any) => {
+                            return async (input: any, requestOptions?: RequestInit) => {
                                 try {
-                                    return await callApi(client, String(routerName), String(procName), input)
+                                    return await callApi(client, String(routerName), String(procName), input, requestOptions)
                                 } catch (err) {
                                     if (!client.options.onError || !(err instanceof SeamClientError)) throw err;
                                     for (const handler of client.options?.onError) {
@@ -99,8 +99,8 @@ export function createSeamClient<ApiType>(baseUrl: string, options?: SeamClientO
     return new SeamClient<ApiType>(baseUrl, options);
 }
 
-export async function callApi(seamClient: SeamClient<any>, routerName: string, funcName: string, input?: Record<string, any>): Promise<any> {
-    const req = buildRequest(input);
+export async function callApi(seamClient: SeamClient<any>, routerName: string, funcName: string, input?: Record<string, any>, requestOptions?: RequestInit): Promise<any> {
+    const req = buildRequest(input, requestOptions ?? {});
     const url = `${seamClient.baseUrl}/${routerName}/${funcName}`;
 
     if (seamClient.options?.middleware?.request) {
@@ -190,7 +190,7 @@ export async function callApi(seamClient: SeamClient<any>, routerName: string, f
     throw new SeamClientError("INVALID_CONTENT_TYPE", `Response has invalid content type ${contentType}.`, url, req, null);
 }
 
-function buildRequest(input: Record<string, any> = {}): RequestInit {
+function buildRequest(input: Record<string, any> = {}, requestOptions: RequestInit): RequestInit {
     let req: RequestInit;
 
     const { json: jsonAfterFiles, files, paths } = extractFiles(input);
@@ -210,11 +210,13 @@ function buildRequest(input: Record<string, any> = {}): RequestInit {
         }
 
         req = {
+            ...requestOptions,
             method: "POST",
             body: formData,
         };
     } else {
         req = {
+            ...requestOptions,
             method: "POST",
             headers: {
                 "Content-Type": "application/json",
