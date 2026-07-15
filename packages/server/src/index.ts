@@ -426,7 +426,7 @@ type InferErrors<P> =
 
 export type RouterToClient<RouterList extends Record<string, Record<string, ProcedureBuilder<any, any, any>>>> = {
     [R in keyof RouterList]: {
-        [P in keyof RouterList[R]]: (input: InferInput<RouterList[R][P]>, requestOptions: RequestInit) => Promise<
+        [P in keyof RouterList[R]]: (input: InferInput<RouterList[R][P]>, requestOptions?: RequestInit) => Promise<
             Result<
                 InferOutput<RouterList[R][P]>,
                 InferErrors<RouterList[R][P]>
