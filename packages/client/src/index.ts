@@ -25,6 +25,7 @@ export interface SeamClientOptionsConstructor {
         response?: SeamResponseMiddleware[];
     };
     onError?: SeamOnErrorHandler[];
+    requestOptions?: RequestInit;
 }
 
 export interface SeamClientOptions {
@@ -33,6 +34,7 @@ export interface SeamClientOptions {
         response: SeamResponseMiddleware[];
     };
     onError: SeamOnErrorHandler[];
+    requestOptions?: RequestInit;
 }
 
 export class SeamClient<ApiType> {
@@ -46,6 +48,7 @@ export class SeamClient<ApiType> {
                 response: options?.middleware?.response || [],
             },
             onError: options?.onError || [],
+            requestOptions: options?.requestOptions,
         };
 
         const client = this;
@@ -58,7 +61,14 @@ export class SeamClient<ApiType> {
                             return async (input: any, requestOptions?: RequestInit) => {
                                 const url = `${client.baseUrl}/${String(routerName)}/${String(procName)}`;
                                 try {
-                                    return await callApi(client, url, String(routerName), String(procName), input, requestOptions);
+                                    return await callApi(
+                                        client,
+                                        url,
+                                        String(routerName),
+                                        String(procName),
+                                        input,
+                                        { ...(options?.requestOptions ?? {}), ...(requestOptions ?? {}) }
+                                    );
                                 } catch (err) {
                                     const error = err instanceof SeamClientError
                                         ? err
