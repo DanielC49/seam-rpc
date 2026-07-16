@@ -119,7 +119,7 @@ export class SeamClientError extends Error {
     }
 }
 
-export function createSeamClient<ApiType>(baseUrl: string, options?: SeamClientOptions): SeamClient<ApiType> {
+export function createSeamClient<ApiType>(baseUrl: string, options?: SeamClientOptionsConstructor): SeamClient<ApiType> {
     return new SeamClient<ApiType>(baseUrl, options);
 }
 
