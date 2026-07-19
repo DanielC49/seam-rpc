@@ -11,6 +11,10 @@ const apiRouters = seamSpace.addRouters({
 
 export type ApiRoutersType = typeof apiRouters;
 
+seamSpace.preHandler(context => {
+    console.log("CALLING " + context.routerName + ":" + context.funcName);
+})
+
 // Handle errors
 
 seamSpace.on("inputValidationError", (error, context) => {

@@ -203,7 +203,6 @@ function defineSeamRouter(seamSpace: SeamSpace, path: string, seamRouterBuilder:
             return;
         }
 
-        // Call procedure
         const ctx: SeamContext = {
             request: req,
             response: res,
@@ -217,6 +216,18 @@ function defineSeamRouter(seamSpace: SeamSpace, path: string, seamRouterBuilder:
                 return { isApiError: false };
         }
 
+        if (seamSpace.middleware.preHandler) {
+            for (const mw of seamSpace.middleware.preHandler) {
+                await mw({
+                    request: req,
+                    routerPath: path,
+                    funcName: req.params.procName,
+                    input: validateInput
+                });
+            }
+        }
+
+        // Call procedure
         try {
             output = await procedure.handler({ input: validatedInput!, ctx });
         } catch (error) {
@@ -320,16 +331,19 @@ async function runMiddleware(seamSpace: SeamSpace, req: Request, res: Response) 
 
     const runMiddleware = (middleware: RequestHandler) =>
         new Promise<void>((resolve, reject) =>
-            middleware(req, res, err => (err ? reject(err) : resolve()))
+            middleware(req, res, err => err ? reject(err) : resolve())
         );
 
-    if (contentType.startsWith("application/json")) {
-        await runMiddleware(seamSpace.jsonParser);
-    } else if (contentType.startsWith("multipart/form-data")) {
-        await runMiddleware(seamSpace.fileHandler);
-    } else {
+    let mw: express.RequestHandler;
+
+    if (contentType.startsWith("application/json"))
+        mw = seamSpace.jsonParser;
+    else if (contentType.startsWith("multipart/form-data"))
+        mw = seamSpace.fileHandler;
+    else
         throw new Error("Unsupported content type.");
-    }
+
+    await runMiddleware(mw);
 
     if (contentType.startsWith("application/json"))
         return req.body;
@@ -377,8 +391,30 @@ function validateData<T extends z.ZodType>(data?: unknown, schema?: T) {
     return schema.parse(data);
 }
 
+export type PreHandlerMiddlewareHandler = (context: PreHandlerMiddlewareContext) => void | Promise<void>;
+export type PostHandlerMiddlewareHandler = (context: PostHandlerMiddlewareContext) => void | Promise<void>;
+
+export type PreHandlerMiddlewareContext = {
+    request: Request;
+    routerPath: string;
+    funcName: string;
+    input?: Record<string, any>;
+}
+
+export type PostHandlerMiddlewareContext = PreHandlerMiddlewareContext & {
+    response: Response;
+    parsedResponse: any;
+}
+
 export class SeamSpace extends EventEmitter<SeamEvents> {
     private _jsonParser = express.json();
+    private _middleware: {
+        preHandler: PreHandlerMiddlewareHandler[];
+        postHandler: PostHandlerMiddlewareHandler[];
+    } = {
+            preHandler: [],
+            postHandler: [],
+        };
 
     constructor(private _app: Express, private _fileHandler: RequestHandler) { super(); }
 
@@ -387,7 +423,23 @@ export class SeamSpace extends EventEmitter<SeamEvents> {
         return {} as RouterToClient<T>;
     }
 
+    /**
+     * Add middleware for when a request comes from the client.
+     */
+    public preHandler(handler: PreHandlerMiddlewareHandler) {
+        this._middleware.preHandler.push(handler);
+    }
+
+    /**
+     * Add middleware for when the request has gone through the procedure handler and the response has been built.
+     */
+    public postHandler(handler: PostHandlerMiddlewareHandler) {
+        this._middleware.postHandler.push(handler);
+
+    }
+
     public get app() { return this._app; }
+    public get middleware() { return this._middleware; }
     public get jsonParser() { return this._jsonParser; }
     public get fileHandler() { return this._fileHandler; }
 }
