@@ -12,7 +12,7 @@ const apiRouters = seamSpace.addRouters({
 export type ApiRoutersType = typeof apiRouters;
 
 seamSpace.preHandler(context => {
-    console.log("CALLING " + context.routerName + ":" + context.funcName);
+    console.log("CALLING " + context.routerPath + ":" + context.funcName);
 })
 
 // Handle errors
